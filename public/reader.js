@@ -31,6 +31,8 @@
         annotations: [],
         activeRef: null,
         pendingNoteText: null,
+        pendingNoteRange: null,
+        pendingNoteSource: 'human',
         userEdits: {},   // persisted: { varDescs: { name: desc }, refNotes: { num: note } }
         pinnedVars: new Set(), // currently pinned variable names
         highlights: [],  // persisted user highlights
@@ -843,7 +845,7 @@
     //  Variables Panel (left)
     // ═══════════════════════════════════════════════
 
-    let varSortMode = 'alpha'; // 'alpha' | 'occurrence' | 'chapter'
+    let varSortMode = 'chapter'; // 'chapter' | 'occurrence' | 'alpha'
     let varFilterText = '';
 
     function buildVarsPanel() {
@@ -860,9 +862,9 @@
                 <input type="text" class="var-filter-input" id="var-filter" placeholder="Filter variables…" value="${esc(varFilterText)}" />
                 <div class="var-toolbar">
                     <div class="var-sort-group">
-                        <button class="var-sort-btn ${varSortMode === 'alpha' ? 'active' : ''}" data-sort="alpha" title="Sort A→Z">A↓</button>
-                        <button class="var-sort-btn ${varSortMode === 'occurrence' ? 'active' : ''}" data-sort="occurrence" title="Sort by first occurrence">1st</button>
                         <button class="var-sort-btn ${varSortMode === 'chapter' ? 'active' : ''}" data-sort="chapter" title="Group by chapter">§</button>
+                        <button class="var-sort-btn ${varSortMode === 'occurrence' ? 'active' : ''}" data-sort="occurrence" title="Sort by first occurrence">1st</button>
+                        <button class="var-sort-btn ${varSortMode === 'alpha' ? 'active' : ''}" data-sort="alpha" title="Sort A→Z">A↓</button>
                     </div>
                     <button class="var-pin-all-btn" id="var-pin-toggle" title="Pin/Unpin all">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L12 22M5 12l7-7 7 7"/></svg>
@@ -1468,6 +1470,7 @@
             if (text && article.contains(sel.anchorNode)) {
                 state.pendingNoteText = text;
                 state.pendingNoteRange = sel.getRangeAt(0).cloneRange();
+                state.pendingNoteSource = 'human';
                 panelNotes.classList.remove('collapsed');
                 $('#notes-toggle').classList.add('active');
                 showNoteEditor(text);
@@ -1512,11 +1515,11 @@
             const replacementText = window.prompt("Enter replacement text for this section:", defaultSummary);
             if (!replacementText) return; // User cancelled
 
-            const annId = Date.now().toString(36);
+            const anchor = buildAnchorFromRange(range);
 
             const wrapper = document.createElement('span');
             wrapper.className = 'collapsed-block';
-            wrapper.dataset.collapseId = annId;
+            wrapper.dataset.collapseId = `tmp-${Date.now().toString(36)}`;
 
             const summaryEl = document.createElement('span');
             summaryEl.className = 'collapsed-summary';
@@ -1548,9 +1551,15 @@
             const ann = await fetchJSON(`/api/annotations/${state.docId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'collapse', selectedText: text, replacementText }),
+                body: JSON.stringify({
+                    type: 'collapse',
+                    selectedText: text,
+                    replacementText,
+                    anchorSelector: anchor.selector,
+                    anchorOffset: anchor.offset,
+                }),
             });
-            ann.id = annId;
+            wrapper.dataset.collapseId = ann.id;
             state.annotations.push(ann);
 
             sel.removeAllRanges();
@@ -1580,6 +1589,10 @@
         const html = `
             <div class="note-editor" id="active-note-editor">
                 <div class="note-editor-quote">"${esc(selectedText.substring(0, 200))}${selectedText.length > 200 ? '…' : ''}"</div>
+                <div class="note-source-toggle">
+                    <label><input type="radio" name="note-source" value="human" checked> Human Note</label>
+                    <label><input type="radio" name="note-source" value="ai"> AI Note</label>
+                </div>
                 <textarea placeholder="Write your note…" autofocus></textarea>
                 <div class="note-editor-actions">
                     <button class="note-cancel-btn" id="note-cancel">Cancel</button>
@@ -1590,35 +1603,52 @@
         const editor = $('#active-note-editor');
         editor.querySelector('textarea').focus();
 
-        $('#note-cancel').addEventListener('click', () => { editor.remove(); state.pendingNoteText = null; state.pendingNoteRange = null; });
+        $('#note-cancel').addEventListener('click', () => {
+            editor.remove();
+            state.pendingNoteText = null;
+            state.pendingNoteRange = null;
+            state.pendingNoteSource = 'human';
+        });
         $('#note-save').addEventListener('click', async () => {
             const note = editor.querySelector('textarea').value.trim();
             if (!note) return;
+            const sourceInput = editor.querySelector('input[name="note-source"]:checked');
+            const source = sourceInput ? sourceInput.value : 'human';
+            const annType = source === 'ai' ? 'ai_note' : 'human_note';
+            const anchor = state.pendingNoteRange ? buildAnchorFromRange(state.pendingNoteRange) : { selector: '', offset: 0 };
 
             // Wrap the text in the DOM immediately
-            let annId = Date.now().toString(36);
+            let mark = null;
             if (state.pendingNoteRange) {
-                const mark = document.createElement('span');
+                mark = document.createElement('span');
                 mark.className = 'user-hl';
-                mark.dataset.hl = 'note';
-                mark.dataset.hlId = annId;
+                mark.dataset.hl = annType === 'ai_note' ? 'ai-note' : 'note';
+                mark.dataset.hlId = `tmp-${Date.now().toString(36)}`;
                 try { state.pendingNoteRange.surroundContents(mark); } catch { }
             }
 
-            pushHistory('Added note');
+            pushHistory(source === 'ai' ? 'Added AI note' : 'Added note');
 
             // Save to backend
             const ann = await fetchJSON(`/api/annotations/${state.docId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type: 'note', selectedText: state.pendingNoteText, note, color: 'var(--note-highlight)' }),
+                body: JSON.stringify({
+                    type: annType,
+                    selectedText: state.pendingNoteText,
+                    note,
+                    color: 'note',
+                    anchorSelector: anchor.selector,
+                    anchorOffset: anchor.offset,
+                }),
             });
-            ann.id = annId; // Overwrite backend ID with our DOM ID for consistency
             state.annotations.push(ann);
+            if (mark) mark.dataset.hlId = ann.id;
 
             editor.remove();
             state.pendingNoteText = null;
             state.pendingNoteRange = null;
+            state.pendingNoteSource = 'human';
             renderAnnotationsList();
             showToast('Note saved');
         });
@@ -1627,30 +1657,63 @@
     function renderAnnotationsList() {
         const list = $('#notes-list');
         const editor = $('#active-note-editor');
+        const notes = [...state.annotations]
+            .filter(isNoteAnnotation)
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
 
-        if (state.annotations.length === 0 && !editor) {
+        if (notes.length === 0 && !editor) {
             list.innerHTML = '<p class="panel-empty">Select text to add a note.</p>';
             return;
         }
 
         let html = editor ? editor.outerHTML : '';
-        [...state.annotations].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).forEach(ann => {
-            const date = new Date(ann.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+        notes.forEach(ann => {
+            const date = ann.createdAt
+                ? new Date(ann.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+                : 'Unknown time';
+            const source = getNoteSource(ann);
+            const sourceLabel = source === 'ai' ? 'AI' : 'Human';
+            const sourceCls = source === 'ai' ? 'ai' : 'human';
+            const selectedText = ann.selectedText || '';
+            const hasJump = !!(ann.anchorSelector || selectedText);
             html += `
                 <div class="note-card">
-                    ${ann.selectedText ? `<div class="note-selected-text">"${esc(ann.selectedText.substring(0, 120))}…"</div>` : ''}
+                    ${selectedText ? `<div class="note-selected-text">"${esc(selectedText.substring(0, 120))}${selectedText.length > 120 ? '…' : ''}"</div>` : ''}
                     <div class="note-content">${esc(ann.note)}</div>
                     <div class="note-meta">
-                        <span>${date}</span>
-                        <button class="note-delete" data-id="${ann.id}">Delete</button>
+                        <span class="note-meta-left">
+                            <span class="note-source-badge ${sourceCls}">${sourceLabel}</span>
+                            <span>${date}</span>
+                        </span>
+                        <span class="note-meta-actions">
+                            ${hasJump ? `<button class="note-jump" data-id="${ann.id}">Jump</button>` : ''}
+                            <button class="note-delete" data-id="${ann.id}">Delete</button>
+                        </span>
                     </div>
                 </div>`;
         });
         list.innerHTML = html;
 
+        list.querySelectorAll('.note-jump').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const ann = state.annotations.find(a => a.id === btn.dataset.id);
+                if (!ann) return;
+                if (!jumpToAnnotationEvidence(ann)) {
+                    showToast('Evidence anchor not found');
+                }
+            });
+        });
+
         list.querySelectorAll('.note-delete').forEach(btn => {
             btn.addEventListener('click', async () => {
                 await fetchJSON(`/api/annotations/${state.docId}/${btn.dataset.id}`, { method: 'DELETE' });
+                const hl = article.querySelector(`.user-hl[data-hl-id="${escapeCss(btn.dataset.id)}"]`);
+                if (hl && hl.parentNode) {
+                    const parent = hl.parentNode;
+                    while (hl.firstChild) parent.insertBefore(hl.firstChild, hl);
+                    hl.remove();
+                    parent.normalize();
+                }
                 state.annotations = state.annotations.filter(a => a.id !== btn.dataset.id);
                 renderAnnotationsList();
                 showToast('Note deleted');
@@ -1661,6 +1724,166 @@
     // ═══════════════════════════════════════════════
     //  Utilities
     // ═══════════════════════════════════════════════
+
+    function isNoteAnnotation(ann) {
+        return ann && ['note', 'human_note', 'ai_note'].includes(ann.type);
+    }
+
+    function getNoteSource(ann) {
+        if (!ann) return 'human';
+        if (ann.type === 'ai_note') return 'ai';
+        return 'human';
+    }
+
+    function getHighlightModeForAnnotation(ann) {
+        if (ann.type === 'ai_note') return 'ai-note';
+        if (ann.type === 'human_note' || ann.type === 'note') return 'note';
+        return ann.color || ann.type || 'background';
+    }
+
+    function escapeCss(value) {
+        if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
+        return String(value).replace(/[^a-zA-Z0-9_\-]/g, '\\$&');
+    }
+
+    function buildCssPath(el) {
+        if (!el || !article.contains(el)) return '';
+        if (el.id) return `#${escapeCss(el.id)}`;
+        const path = [];
+        let current = el;
+        while (current && current !== article) {
+            let segment = current.tagName.toLowerCase();
+            if (current.classList.contains('math-display')) segment += '.math-display';
+            if (current.parentElement) {
+                const siblings = Array.from(current.parentElement.children)
+                    .filter(node => node.tagName === current.tagName);
+                if (siblings.length > 1) {
+                    segment += `:nth-of-type(${siblings.indexOf(current) + 1})`;
+                }
+            }
+            path.unshift(segment);
+            if (current.id) {
+                path[0] = `#${escapeCss(current.id)}`;
+                break;
+            }
+            current = current.parentElement;
+        }
+        return path.join(' > ');
+    }
+
+    function getAnchorContainer(startNode) {
+        const startEl = startNode && startNode.nodeType === Node.TEXT_NODE ? startNode.parentElement : startNode;
+        if (!startEl) return null;
+        return startEl.closest('p, li, blockquote, h1, h2, h3, h4, h5, h6, pre, td, th, figcaption, .math-display')
+            || startEl.closest('[id]')
+            || startEl;
+    }
+
+    function getTextOffsetInContainer(container, range) {
+        try {
+            const offsetRange = document.createRange();
+            offsetRange.selectNodeContents(container);
+            offsetRange.setEnd(range.startContainer, range.startOffset);
+            return offsetRange.toString().length;
+        } catch {
+            return 0;
+        }
+    }
+
+    function buildAnchorFromRange(range) {
+        if (!range) return { selector: '', offset: 0 };
+        const container = getAnchorContainer(range.startContainer);
+        if (!container) return { selector: '', offset: 0 };
+        return {
+            selector: buildCssPath(container),
+            offset: getTextOffsetInContainer(container, range),
+        };
+    }
+
+    function createRangeFromGlobalOffsets(nodes, start, end) {
+        let startNode = null;
+        let endNode = null;
+        let startOffset = 0;
+        let endOffset = 0;
+
+        for (const entry of nodes) {
+            if (!startNode && start >= entry.start && start <= entry.end) {
+                startNode = entry.node;
+                startOffset = start - entry.start;
+            }
+            if (!endNode && end >= entry.start && end <= entry.end) {
+                endNode = entry.node;
+                endOffset = end - entry.start;
+            }
+            if (startNode && endNode) break;
+        }
+
+        if (!startNode || !endNode) return null;
+        const range = document.createRange();
+        range.setStart(startNode, startOffset);
+        range.setEnd(endNode, endOffset);
+        return range;
+    }
+
+    function findRangeInContainer(container, selectedText, preferredOffset = null) {
+        if (!container || !selectedText) return null;
+        const target = selectedText.trim();
+        if (!target) return null;
+
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        const nodes = [];
+        let fullText = '';
+        while (walker.nextNode()) {
+            const node = walker.currentNode;
+            const start = fullText.length;
+            fullText += node.textContent;
+            nodes.push({ node, start, end: fullText.length });
+        }
+        if (!fullText) return null;
+
+        const candidates = [];
+        let idx = fullText.indexOf(target);
+        while (idx !== -1) {
+            candidates.push(idx);
+            idx = fullText.indexOf(target, idx + 1);
+        }
+        if (candidates.length === 0) return null;
+
+        let chosen = candidates[0];
+        if (typeof preferredOffset === 'number' && !Number.isNaN(preferredOffset)) {
+            chosen = candidates.reduce((best, curr) => (
+                Math.abs(curr - preferredOffset) < Math.abs(best - preferredOffset) ? curr : best
+            ), candidates[0]);
+        }
+
+        return createRangeFromGlobalOffsets(nodes, chosen, chosen + target.length);
+    }
+
+    function findRangeForAnnotation(ann) {
+        if (!ann || !ann.selectedText) return null;
+        const preferredOffset = Number.isFinite(Number(ann.anchorOffset)) ? Number(ann.anchorOffset) : null;
+
+        if (ann.anchorSelector) {
+            const container = article.querySelector(ann.anchorSelector) || document.querySelector(ann.anchorSelector);
+            const anchoredRange = findRangeInContainer(container, ann.selectedText, preferredOffset);
+            if (anchoredRange) return anchoredRange;
+        }
+
+        return findRangeInContainer(article, ann.selectedText, preferredOffset);
+    }
+
+    function jumpToAnnotationEvidence(ann) {
+        const range = findRangeForAnnotation(ann);
+        if (!range) return false;
+        const targetEl = range.startContainer.nodeType === Node.TEXT_NODE
+            ? range.startContainer.parentElement
+            : range.startContainer;
+        if (!targetEl) return false;
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        targetEl.classList.add('evidence-focus');
+        setTimeout(() => targetEl.classList.remove('evidence-focus'), 1400);
+        return true;
+    }
 
     async function fetchJSON(url, opts = {}) {
         const res = await fetch(url, opts);
@@ -1684,55 +1907,46 @@
         if (!state.annotations || !state.annotations.length) return;
 
         state.annotations.forEach(ann => {
-            const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT);
-            while (walker.nextNode()) {
-                const node = walker.currentNode;
-                const idx = node.textContent.indexOf(ann.selectedText);
+            const range = findRangeForAnnotation(ann);
+            if (!range) return;
+            const anchorEl = range.startContainer.nodeType === Node.TEXT_NODE ? range.startContainer.parentElement : range.startContainer;
+            if (anchorEl && anchorEl.closest('.user-hl, .collapsed-block')) return;
 
-                if (idx >= 0 && !node.parentElement.closest('.user-hl, .collapsed-block')) {
-                    const range = document.createRange();
-                    range.setStart(node, idx);
-                    range.setEnd(node, idx + ann.selectedText.length);
+            if (ann.type === 'collapse') {
+                const wrapper = document.createElement('span');
+                wrapper.className = 'collapsed-block';
+                wrapper.dataset.collapseId = ann.id;
 
-                    if (ann.type === 'collapse') {
-                        const wrapper = document.createElement('span');
-                        wrapper.className = 'collapsed-block';
-                        wrapper.dataset.collapseId = ann.id;
+                const summaryEl = document.createElement('span');
+                summaryEl.className = 'collapsed-summary';
+                summaryEl.textContent = `📦 ${ann.replacementText || ann.selectedText.substring(0, 40) + '…'}`;
+                summaryEl.title = ann.selectedText.substring(0, 200) + (ann.selectedText.length > 200 ? '…' : '');
+                summaryEl.addEventListener('click', () => wrapper.classList.add('expanded'));
 
-                        const summaryEl = document.createElement('span');
-                        summaryEl.className = 'collapsed-summary';
-                        summaryEl.textContent = `📦 ${ann.replacementText || ann.selectedText.substring(0, 40) + '…'}`;
-                        summaryEl.title = ann.selectedText.substring(0, 200) + (ann.selectedText.length > 200 ? '…' : '');
-                        summaryEl.addEventListener('click', () => wrapper.classList.add('expanded'));
-
-                        const fullEl = document.createElement('span');
-                        fullEl.className = 'collapsed-full';
-                        try {
-                            fullEl.appendChild(range.extractContents());
-                        } catch {
-                            fullEl.textContent = ann.selectedText;
-                        }
-
-                        const toggleBtn = document.createElement('button');
-                        toggleBtn.className = 'collapsed-toggle';
-                        toggleBtn.textContent = '▼ collapse';
-                        toggleBtn.addEventListener('click', () => wrapper.classList.remove('expanded'));
-                        fullEl.appendChild(toggleBtn);
-
-                        wrapper.appendChild(summaryEl);
-                        wrapper.appendChild(fullEl);
-                        range.insertNode(wrapper);
-
-                    } else {
-                        // highlight or note
-                        const mark = document.createElement('span');
-                        mark.className = 'user-hl';
-                        mark.dataset.hl = ann.color || ann.type;
-                        mark.dataset.hlId = ann.id;
-                        try { range.surroundContents(mark); } catch { }
-                    }
-                    break;
+                const fullEl = document.createElement('span');
+                fullEl.className = 'collapsed-full';
+                try {
+                    fullEl.appendChild(range.extractContents());
+                } catch {
+                    fullEl.textContent = ann.selectedText;
                 }
+
+                const toggleBtn = document.createElement('button');
+                toggleBtn.className = 'collapsed-toggle';
+                toggleBtn.textContent = '▼ collapse';
+                toggleBtn.addEventListener('click', () => wrapper.classList.remove('expanded'));
+                fullEl.appendChild(toggleBtn);
+
+                wrapper.appendChild(summaryEl);
+                wrapper.appendChild(fullEl);
+                range.insertNode(wrapper);
+
+            } else {
+                const mark = document.createElement('span');
+                mark.className = 'user-hl';
+                mark.dataset.hl = getHighlightModeForAnnotation(ann);
+                mark.dataset.hlId = ann.id;
+                try { range.surroundContents(mark); } catch { }
             }
         });
     }
@@ -1826,28 +2040,47 @@
 
             if (existingAnn) {
                 existingAnn.note = newNote;
-                await fetchJSON(`/api/annotations/${state.docId}`, {
-                    method: 'POST',
+                await fetchJSON(`/api/annotations/${state.docId}/${existingAnn.id}`, {
+                    method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(existingAnn)
+                    body: JSON.stringify({
+                        note: existingAnn.note,
+                        color: existingAnn.color,
+                        replacementText: existingAnn.replacementText,
+                        type: existingAnn.type,
+                        selectedText: existingAnn.selectedText,
+                        anchorSelector: existingAnn.anchorSelector,
+                        anchorOffset: existingAnn.anchorOffset,
+                    })
                 });
             } else {
                 // Convert pure DOM highlight to a fully backed annotation
+                const range = document.createRange();
+                range.selectNodeContents(hlElement);
+                const anchor = buildAnchorFromRange(range);
                 existingAnn = await fetchJSON(`/api/annotations/${state.docId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ type: 'highlight', note: newNote, color: type })
+                    body: JSON.stringify({
+                        type: 'highlight',
+                        selectedText: hlElement.textContent || '',
+                        note: newNote,
+                        color: type,
+                        anchorSelector: anchor.selector,
+                        anchorOffset: anchor.offset,
+                    })
                 });
-                existingAnn.id = hlId;
                 state.annotations.push(existingAnn);
+                hlElement.dataset.hlId = existingAnn.id;
             }
 
-            if (newNote && type !== 'note') {
+            if (existingAnn) {
+                hlElement.dataset.hl = getHighlightModeForAnnotation(existingAnn);
+            } else if (newNote && type !== 'note' && type !== 'ai-note') {
                 hlElement.dataset.hl = 'note';
-                pushHistory('Updated annotation note');
-            } else {
-                pushHistory('Updated annotation'); // trigger state save
             }
+
+            pushHistory(newNote ? 'Updated annotation note' : 'Updated annotation');
 
             renderAnnotationsList();
             popup.remove();

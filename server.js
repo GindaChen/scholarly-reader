@@ -395,7 +395,7 @@ app.post('/api/annotations/:docId', (req, res) => {
 // Update annotation
 app.put('/api/annotations/:docId/:id', (req, res) => {
     const { docId, id } = req.params;
-    const { note, color, replacementText } = req.body;
+    const { note, color, replacementText, type, selectedText, anchorSelector, anchorOffset } = req.body;
     const annotations = loadAnnotations(docId);
     const idx = annotations.findIndex(a => a.id === id);
     if (idx === -1) return res.status(404).json({ error: 'Annotation not found' });
@@ -403,6 +403,10 @@ app.put('/api/annotations/:docId/:id', (req, res) => {
     if (note !== undefined) annotations[idx].note = note;
     if (color !== undefined) annotations[idx].color = color;
     if (replacementText !== undefined) annotations[idx].replacementText = replacementText;
+    if (type !== undefined) annotations[idx].type = type;
+    if (selectedText !== undefined) annotations[idx].selectedText = selectedText;
+    if (anchorSelector !== undefined) annotations[idx].anchorSelector = anchorSelector;
+    if (anchorOffset !== undefined) annotations[idx].anchorOffset = anchorOffset;
 
     annotations[idx].updatedAt = new Date().toISOString();
     saveAnnotations(docId, annotations);

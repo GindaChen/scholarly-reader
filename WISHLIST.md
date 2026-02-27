@@ -1,5 +1,11 @@
 # Scholarly Reader — Wishlist & Roadmap
 
+## OpenPhD Vision Docs
+- [`OPENPHD_WISHLIST.md`](./OPENPHD_WISHLIST.md) — 分阶段功能清单（AI 导读、lineage、协作、变量/函数/tensor 语义）
+- [`OPENPHD_INTERPRETATION.md`](./OPENPHD_INTERPRETATION.md) — 对“活知识系统”的产品解释与落地路径
+- [`OPENPHD_P0_ISSUES.md`](./OPENPHD_P0_ISSUES.md) — 可执行 issue 拆解（P0）
+- [`OPENPHD_100_IDEAS.md`](./OPENPHD_100_IDEAS.md) — 100 ideas backlog（按优先级分层）
+
 ## ✅ Done
 - [x] Three-panel layout: Left (variables) | Center (article) | Right (references)
 - [x] Notes as separate right panel (doesn't overlap references)
