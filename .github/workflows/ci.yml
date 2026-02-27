@@ -1,0 +1,29 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Smoke test — server starts and responds
+        run: |
+          node server.js &
+          SERVER_PID=$!
+          sleep 3
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3003/)
+          echo "GET / → $STATUS"
+          API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3003/api/docs)
+          echo "GET /api/docs → $API_STATUS"
+          kill $SERVER_PID
+          if [ "$STATUS" != "200" ] || [ "$API_STATUS" != "200" ]; then
+            echo "❌ Smoke test failed"
+            exit 1
+          fi
+          echo "✅ Smoke test passed"

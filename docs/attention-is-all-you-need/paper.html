@@ -1,0 +1,760 @@
+<h1>Attention Is All You Need</h1>
+
+<div class="article-meta">
+    <strong>Ashish Vaswani</strong><sup>∗</sup>, <strong>Noam Shazeer</strong><sup>∗</sup>, <strong>Niki
+        Parmar</strong><sup>∗</sup>, <strong>Jakob Uszkoreit</strong><sup>∗</sup>, <strong>Llion
+        Jones</strong><sup>∗</sup>, <strong>Aidan N. Gomez</strong><sup>∗†</sup>, <strong>Łukasz
+        Kaiser</strong><sup>∗</sup>, <strong>Illia Polosukhin</strong><sup>∗‡</sup><br>
+    <em>Google Brain &amp; Google Research, University of Toronto</em><br>
+    31st Conference on Neural Information Processing Systems (NeurIPS 2017)
+</div>
+
+<h2 id="abstract">Abstract</h2>
+
+<p>The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that
+    include an encoder and a decoder. The best performing models also connect the encoder and decoder through an
+    attention mechanism. We propose a new simple network architecture, the <strong>Transformer</strong>, based solely on
+    attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation
+    tasks show these models to be superior in quality while being more parallelizable and requiring significantly less
+    time to train. Our model achieves <strong>28.4 BLEU</strong> on the WMT 2014 English-to-German translation task,
+    improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French
+    translation task, our model establishes a new single-model state-of-the-art BLEU score of <strong>41.8</strong>
+    after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the
+    literature.<sup class="ref-badge" data-ref="1" data-title="Attention Is All You Need"
+        data-url="https://arxiv.org/abs/1706.03762"
+        data-quote="We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely.">1</sup>
+</p>
+
+<hr>
+
+<h2 id="introduction">1 Introduction</h2>
+
+<p>Recurrent neural networks, long short-term memory<sup class="ref-badge" data-ref="2"
+        data-title="Long Short-Term Memory" data-url="https://doi.org/10.1162/neco.1997.9.8.1735"
+        data-quote="A novel recurrent net architecture that can learn to bridge minimal time lags in excess of 1000 discrete-time steps.">2</sup>
+    and gated recurrent<sup class="ref-badge" data-ref="3"
+        data-title="Empirical Evaluation of Gated Recurrent Neural Networks on Sequence Modeling"
+        data-url="https://arxiv.org/abs/1412.3555"
+        data-quote="We compare different types of recurrent units in recurrent neural networks.">3</sup> neural networks
+    in particular, have been firmly established as state of the art approaches in sequence modeling and transduction
+    problems such as language modeling and machine translation<sup class="ref-badge" data-ref="4"
+        data-title="Sequence to Sequence Learning with Neural Networks" data-url="https://arxiv.org/abs/1409.3215"
+        data-quote="We present a general end-to-end approach to sequence learning that makes minimal assumptions on the sequence structure.">4</sup><sup
+        class="ref-badge" data-ref="5"
+        data-title="Neural Machine Translation by Jointly Learning to Align and Translate"
+        data-url="https://arxiv.org/abs/1409.0473"
+        data-quote="We conjecture that the use of a fixed-length vector is a bottleneck in improving the performance of this basic encoder-decoder architecture.">5</sup>.
+    Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder
+    architectures<sup class="ref-badge" data-ref="6" data-title="Google's Neural Machine Translation System"
+        data-url="https://arxiv.org/abs/1609.08144"
+        data-quote="Our model consists of a deep LSTM network with 8 encoder and 8 decoder layers.">6</sup><sup
+        class="ref-badge" data-ref="7" data-title="Exploring the Limits of Language Modeling"
+        data-url="https://arxiv.org/abs/1602.02410"
+        data-quote="We explore recent advances in recurrent neural network based language models.">7</sup>.</p>
+
+<p>Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning
+    the positions to steps in computation time, they generate a sequence of hidden states <span class="var"
+        data-var="h_t" data-desc="Hidden state at time step t in the recurrent model"
+        style="--var-color: #f0a050">h<sub>t</sub></span>, as a function of the previous hidden state <span class="var"
+        data-var="h_t" data-desc="Hidden state at time step t in the recurrent model"
+        style="--var-color: #f0a050">h<sub>t−1</sub></span> and the input for position <span class="var" data-var="t"
+        data-desc="Time step / position index in the sequence" style="--var-color: #58a6ff">t</span>. This inherently
+    sequential nature precludes parallelization within training examples, which becomes critical at longer sequence
+    lengths, as memory constraints limit batching across examples.</p>
+
+<p>Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various
+    tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences<sup
+        class="ref-badge" data-ref="5"
+        data-title="Neural Machine Translation by Jointly Learning to Align and Translate"
+        data-url="https://arxiv.org/abs/1409.0473"
+        data-quote="We conjecture that the use of a fixed-length vector is a bottleneck.">5</sup><sup class="ref-badge"
+        data-ref="8" data-title="Effective Approaches to Attention-based Neural Machine Translation"
+        data-url="https://arxiv.org/abs/1508.04025"
+        data-quote="We examine two simple and effective classes of attentional mechanism.">8</sup>. In all but a few
+    cases, however, such attention mechanisms are used in conjunction with a recurrent network.</p>
+
+<p>In this work we propose the <strong>Transformer</strong>, a model architecture eschewing recurrence and instead
+    relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer
+    allows for significantly more parallelization and can reach a new state of the art in translation quality after
+    being trained for as little as twelve hours on eight P100 GPUs.</p>
+
+<hr>
+
+<h2 id="background">2 Background</h2>
+
+<p>The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU<sup
+        class="ref-badge" data-ref="9" data-title="Can Active Memory Replace Attention?"
+        data-url="https://arxiv.org/abs/1610.08613"
+        data-quote="We investigate whether attention can be replaced by a memory mechanism.">9</sup>, ByteNet<sup
+        class="ref-badge" data-ref="10" data-title="Neural Machine Translation in Linear Time"
+        data-url="https://arxiv.org/abs/1610.10099"
+        data-quote="We present ByteNet, a neural translation model with linear running time.">10</sup> and ConvS2S<sup
+        class="ref-badge" data-ref="11" data-title="Convolutional Sequence to Sequence Learning"
+        data-url="https://arxiv.org/abs/1705.03122"
+        data-quote="We introduce an architecture based entirely on convolutional neural networks.">11</sup>, all of
+    which use convolutional neural networks as basic building block, computing hidden representations in parallel for
+    all input and output positions. In these models, the number of operations required to relate signals from two
+    arbitrary input or output positions grows in the distance between positions, linearly for ConvS2S and
+    logarithmically for ByteNet. This makes it more difficult to learn dependencies between distant positions. In the
+    Transformer this is reduced to a constant number of operations, albeit at the cost of reduced effective resolution
+    due to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as described in
+    Section 3.2.</p>
+
+<p>Self-attention, sometimes called intra-attention, is an attention mechanism relating different positions of a single
+    sequence in order to compute a representation of the sequence. Self-attention has been used successfully in a
+    variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning
+    task-independent sentence representations<sup class="ref-badge" data-ref="12"
+        data-title="A Decomposable Attention Model for Natural Language Inference"
+        data-url="https://arxiv.org/abs/1606.01933"
+        data-quote="We propose a simple neural architecture for natural language inference.">12</sup>.</p>
+
+<p>To the best of our knowledge, however, the Transformer is the first transduction model relying entirely on
+    self-attention to compute representations of its input and output without using sequence-aligned RNNs or
+    convolution.</p>
+
+<hr>
+
+<h2 id="model-architecture">3 Model Architecture</h2>
+
+<p>Most competitive neural sequence transduction models have an encoder-decoder structure. Here, the encoder maps an
+    input sequence of symbol representations (<span class="var" data-var="x"
+        data-desc="Input symbol representation at each position" style="--var-color: #f0a050">x<sub>1</sub></span>, …,
+    <span class="var" data-var="x" data-desc="Input symbol representation at each position"
+        style="--var-color: #f0a050">x<sub>n</sub></span>) to a sequence of continuous representations
+    <strong>z</strong> = (<span class="var" data-var="z"
+        data-desc="Continuous representation output by the encoder at each position"
+        style="--var-color: #7ee787">z<sub>1</sub></span>, …, <span class="var" data-var="z"
+        data-desc="Continuous representation output by the encoder at each position"
+        style="--var-color: #7ee787">z<sub>n</sub></span>). Given <strong>z</strong>, the decoder then generates an
+    output sequence (<span class="var" data-var="y" data-desc="Output symbol generated by the decoder at each position"
+        style="--var-color: #d2a8ff">y<sub>1</sub></span>, …, <span class="var" data-var="y"
+        data-desc="Output symbol generated by the decoder at each position"
+        style="--var-color: #d2a8ff">y<sub>m</sub></span>) of symbols one element at a time. At each step the model is
+    auto-regressive, consuming the previously generated symbols as additional input when generating the next.</p>
+
+<p>The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers
+    for both the encoder and decoder, shown in the left and right halves of Figure 1, respectively.</p>
+
+<h3 id="encoder-decoder-stacks">3.1 Encoder and Decoder Stacks</h3>
+
+<p><strong>Encoder:</strong> The encoder is composed of a stack of <span class="var" data-var="N"
+        data-desc="Number of identical layers in the encoder/decoder stack (N = 6)"
+        style="--var-color: #ff7b72">N</span> = 6 identical layers. Each layer has two sub-layers. The first is a
+    multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network.
+    We employ a residual connection around each of the two sub-layers, followed by layer normalization. That is, the
+    output of each sub-layer is LayerNorm(<span class="var" data-var="x"
+        data-desc="Input symbol representation at each position" style="--var-color: #f0a050">x</span> + Sublayer(<span
+        class="var" data-var="x" data-desc="Input symbol representation at each position"
+        style="--var-color: #f0a050">x</span>)), where Sublayer(<span class="var" data-var="x"
+        data-desc="Input symbol representation at each position" style="--var-color: #f0a050">x</span>) is the function
+    implemented by the sub-layer itself. To facilitate these residual connections, all sub-layers in the model, as well
+    as the embedding layers, produce outputs of dimension <span class="var" data-var="d_model"
+        data-desc="Model embedding dimension (d_model = 512)" style="--var-color: #ffd700">d<sub>model</sub></span> =
+    512.</p>
+
+<p><strong>Decoder:</strong> The decoder is also composed of a stack of <span class="var" data-var="N"
+        data-desc="Number of identical layers in the encoder/decoder stack (N = 6)"
+        style="--var-color: #ff7b72">N</span> = 6 identical layers. In addition to the two sub-layers in each encoder
+    layer, the decoder inserts a third sub-layer, which performs multi-head attention over the output of the encoder
+    stack. Similar to the encoder, we employ residual connections around each of the sub-layers, followed by layer
+    normalization. We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending
+    to subsequent positions. This masking, combined with fact that the output embeddings are offset by one position,
+    ensures that the predictions for position <span class="var" data-var="i" data-desc="Position index in the sequence"
+        style="--var-color: #58a6ff">i</span> can depend only on the known outputs at positions less than <span
+        class="var" data-var="i" data-desc="Position index in the sequence" style="--var-color: #58a6ff">i</span>.</p>
+
+<h3 id="attention">3.2 Attention</h3>
+
+<p>An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query,
+    keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight
+    assigned to each value is computed by a compatibility function of the query with the corresponding key.</p>
+
+<h3 id="scaled-dot-product-attention">3.2.1 Scaled Dot-Product Attention</h3>
+
+<p>We call our particular attention "Scaled Dot-Product Attention". The input consists of queries and keys of dimension
+    <span class="var" data-var="d_k" data-desc="Dimension of key and query vectors (d_k = 64)"
+        style="--var-color: #79c0ff">d<sub>k</sub></span>, and values of dimension <span class="var" data-var="d_v"
+        data-desc="Dimension of value vectors (d_v = 64)" style="--var-color: #ffa657">d<sub>v</sub></span>. We compute
+    the dot products of the query with all keys, divide each by <span class="var" data-var="d_k"
+        data-desc="Dimension of key and query vectors (d_k = 64)" style="--var-color: #79c0ff">√d<sub>k</sub></span>,
+    and apply a softmax function to obtain the weights on the values.</p>
+
+<div class="math-display">
+    <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span
+                        class="mord">Attention</span></span><span class="mopen">(</span><span class="var" data-var="Q"
+                    data-desc="Query matrix — packed queries (shape: seq_len × d_k)" style="--var-color: #f0a050"><span
+                        class="mord mathnormal">Q</span></span><span class="mpunct">,</span><span class="mspace"
+                    style="margin-right:0.1667em"></span><span class="var" data-var="K"
+                    data-desc="Key matrix — packed keys (shape: seq_len × d_k)" style="--var-color: #58a6ff"><span
+                        class="mord mathnormal" style="margin-right:0.07153em;">K</span></span><span
+                    class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="var"
+                    data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)"
+                    style="--var-color: #7ee787"><span class="mord mathnormal"
+                        style="margin-right:0.22222em;">V</span></span><span class="mclose">)</span><span class="mspace"
+                    style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace"
+                    style="margin-right:0.2778em"></span><span class="mord text"><span
+                        class="mord">softmax</span></span><span class="minner"><span class="mopen delimcenter"
+                        style="top:0em"><span class="delimsizing size3">(</span></span><span class="mord"><span
+                            class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist"
+                                        style="height:1.32em"><span style="top:-2.11em"><span class="pstrut"
+                                                style="height:3em"></span><span class="mord"><span
+                                                    class="mord sqrt"><span class="var" data-var="d_k"
+                                                        data-desc="Dimension of key and query vectors (d_k = 64)"
+                                                        style="--var-color: #79c0ff"><span
+                                                            class="mord mathnormal">d</span><span class="msupsub"><span
+                                                                class="vlist-t vlist-t2"><span class="vlist-r"><span
+                                                                        class="vlist" style="height:0.34em"><span
+                                                                            style="top:-2.55em"><span class="pstrut"
+                                                                                style="height:2.7em"></span><span
+                                                                                class="sizing reset-size6 size3 mtight"><span
+                                                                                    class="mord mathnormal mtight">k</span></span></span></span></span></span></span></span></span></span></span></span><span
+                                        style="top:-3.23em"><span class="pstrut" style="height:3em"></span><span
+                                            class="frac-line" style="border-bottom-width:0.04em"></span></span><span
+                                        style="top:-3.68em"><span class="pstrut" style="height:3em"></span><span
+                                            class="mord"><span class="var" data-var="Q"
+                                                data-desc="Query matrix — packed queries (shape: seq_len × d_k)"
+                                                style="--var-color: #f0a050"><span
+                                                    class="mord mathnormal">Q</span></span><span class="var"
+                                                data-var="K" data-desc="Key matrix — packed keys (shape: seq_len × d_k)"
+                                                style="--var-color: #58a6ff"><span class="mord mathnormal"
+                                                    style="margin-right:0.07153em;">K</span><sup>T</sup></span></span></span></span></span></span></span><span
+                        class="mclose delimcenter" style="top:0em"><span
+                            class="delimsizing size3">)</span></span></span><span class="var" data-var="V"
+                    data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span
+                        class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span>
+</div>
+
+<p>The two most commonly used attention functions are additive attention<sup class="ref-badge" data-ref="5"
+        data-title="Neural Machine Translation by Jointly Learning to Align and Translate"
+        data-url="https://arxiv.org/abs/1409.0473"
+        data-quote="We conjecture that the use of a fixed-length vector is a bottleneck.">5</sup>, and dot-product
+    (multiplicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor of
+    1/<span class="var" data-var="d_k" data-desc="Dimension of key and query vectors (d_k = 64)"
+        style="--var-color: #79c0ff">√d<sub>k</sub></span>.</p>
+
+<p>While for small values of <span class="var" data-var="d_k" data-desc="Dimension of key and query vectors (d_k = 64)"
+        style="--var-color: #79c0ff">d<sub>k</sub></span> the two mechanisms perform similarly, additive attention
+    outperforms dot product attention without scaling for larger values of <span class="var" data-var="d_k"
+        data-desc="Dimension of key and query vectors (d_k = 64)" style="--var-color: #79c0ff">d<sub>k</sub></span>. We
+    suspect that for large values of <span class="var" data-var="d_k"
+        data-desc="Dimension of key and query vectors (d_k = 64)" style="--var-color: #79c0ff">d<sub>k</sub></span>, the
+    dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small
+    gradients. To counteract this effect, we scale the dot products by 1/<span class="var" data-var="d_k"
+        data-desc="Dimension of key and query vectors (d_k = 64)" style="--var-color: #79c0ff">√d<sub>k</sub></span>.
+</p>
+
+<h3 id="multi-head-attention">3.2.2 Multi-Head Attention</h3>
+
+<p>Instead of performing a single attention function with <span class="var" data-var="d_model"
+        data-desc="Model embedding dimension (d_model = 512)"
+        style="--var-color: #ffd700">d<sub>model</sub></span>-dimensional keys, values and queries, we found it
+    beneficial to linearly project the queries, keys and values <span class="var" data-var="h"
+        data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72">h</span> times with
+    different, learned linear projections to <span class="var" data-var="d_k"
+        data-desc="Dimension of key and query vectors (d_k = 64)" style="--var-color: #79c0ff">d<sub>k</sub></span>,
+    <span class="var" data-var="d_k" data-desc="Dimension of key and query vectors (d_k = 64)"
+        style="--var-color: #79c0ff">d<sub>k</sub></span> and <span class="var" data-var="d_v"
+        data-desc="Dimension of value vectors (d_v = 64)" style="--var-color: #ffa657">d<sub>v</sub></span> dimensions,
+    respectively. On each of these projected versions of queries, keys and values we then perform the attention function
+    in parallel, yielding <span class="var" data-var="d_v" data-desc="Dimension of value vectors (d_v = 64)"
+        style="--var-color: #ffa657">d<sub>v</sub></span>-dimensional output values. These are concatenated and once
+    again projected, resulting in the final values.</p>
+
+<div class="math-display">
+    <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span
+                        class="mord">MultiHead</span></span><span class="mopen">(</span><span class="var" data-var="Q"
+                    data-desc="Query matrix — packed queries (shape: seq_len × d_k)" style="--var-color: #f0a050"><span
+                        class="mord mathnormal">Q</span></span><span class="mpunct">,</span><span class="mspace"
+                    style="margin-right:0.1667em"></span><span class="var" data-var="K"
+                    data-desc="Key matrix — packed keys (shape: seq_len × d_k)" style="--var-color: #58a6ff"><span
+                        class="mord mathnormal" style="margin-right:0.07153em;">K</span></span><span
+                    class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em"></span><span class="var"
+                    data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)"
+                    style="--var-color: #7ee787"><span class="mord mathnormal"
+                        style="margin-right:0.22222em;">V</span></span><span class="mclose">)</span><span class="mspace"
+                    style="margin-right:0.2778em"></span><span class="mrel">=</span><span class="mspace"
+                    style="margin-right:0.2778em"></span><span class="mord text"><span
+                        class="mord">Concat</span></span><span class="mopen">(</span><span class="mord text"><span
+                        class="mord">head</span></span><sub>1</sub><span class="mpunct">,</span> … <span
+                    class="mpunct">,</span> <span class="mord text"><span class="mord">head</span></span><sub><span
+                        class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)"
+                        style="--var-color: #ff7b72">h</span></sub><span class="mclose">)</span><span class="var"
+                    data-var="W^O" data-desc="Output projection matrix (h·d_v × d_model)"
+                    style="--var-color: #d4bfff"><span class="mord mathnormal"
+                        style="margin-right:0.13889em;">W</span><sup>O</sup></span></span></span></span>
+</div>
+
+<p>where head<sub><span class="var" data-var="i" data-desc="Position index in the sequence"
+            style="--var-color: #58a6ff">i</span></sub> = Attention(<span class="var" data-var="Q"
+        data-desc="Query matrix" style="--var-color: #f0a050">Q</span><span class="var" data-var="W_i^Q"
+        data-desc="Query projection matrix for head i" style="--var-color: #f778ba">W<sub>i</sub><sup>Q</sup></span>,
+    <span class="var" data-var="K" data-desc="Key matrix" style="--var-color: #58a6ff">K</span><span class="var"
+        data-var="W_i^K" data-desc="Key projection matrix for head i"
+        style="--var-color: #56d4dd">W<sub>i</sub><sup>K</sup></span>, <span class="var" data-var="V"
+        data-desc="Value matrix" style="--var-color: #7ee787">V</span><span class="var" data-var="W_i^V"
+        data-desc="Value projection matrix for head i" style="--var-color: #a5d6ff">W<sub>i</sub><sup>V</sup></span>)
+</p>
+
+<p>In this work we employ <span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)"
+        style="--var-color: #ff7b72">h</span> = 8 parallel attention heads. For each of these we use <span class="var"
+        data-var="d_k" data-desc="Dimension of key and query vectors (d_k = 64)"
+        style="--var-color: #79c0ff">d<sub>k</sub></span> = <span class="var" data-var="d_v"
+        data-desc="Dimension of value vectors (d_v = 64)" style="--var-color: #ffa657">d<sub>v</sub></span> = <span
+        class="var" data-var="d_model" data-desc="Model embedding dimension (d_model = 512)"
+        style="--var-color: #ffd700">d<sub>model</sub></span>/<span class="var" data-var="h"
+        data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72">h</span> = 64. Due to the
+    reduced dimension of each head, the total computational cost is similar to that of single-head attention with full
+    dimensionality.</p>
+
+<h3 id="ffn">3.3 Position-wise Feed-Forward Networks</h3>
+
+<p>In addition to attention sub-layers, each of the layers in our encoder and decoder contains a fully connected
+    feed-forward network, which is applied to each position separately and identically. This consists of two linear
+    transformations with a ReLU activation in between.</p>
+
+<div class="math-display">
+    <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord text"><span
+                        class="mord">FFN</span></span><span class="mopen">(</span><span class="var" data-var="x"
+                    data-desc="Input vector at each position" style="--var-color: #f0a050"><span
+                        class="mord mathnormal">x</span></span><span class="mclose">)</span><span class="mrel"> =
+                </span><span class="mop">max</span><span class="mopen">(</span>0, <span class="var" data-var="x"
+                    data-desc="Input vector at each position" style="--var-color: #f0a050"><span
+                        class="mord mathnormal">x</span></span><span class="var" data-var="W_1"
+                    data-desc="First linear transformation weight matrix (d_model × d_ff)"
+                    style="--var-color: #58a6ff"><span class="mord mathnormal"
+                        style="margin-right:0.13889em;">W</span><sub>1</sub></span> + <span class="var" data-var="b_1"
+                    data-desc="First bias vector" style="--var-color: #7ee787"><span
+                        class="mord mathnormal">b</span><sub>1</sub></span><span class="mclose">)</span><span
+                    class="var" data-var="W_2" data-desc="Second linear transformation weight matrix (d_ff × d_model)"
+                    style="--var-color: #d2a8ff"><span class="mord mathnormal"
+                        style="margin-right:0.13889em;">W</span><sub>2</sub></span> + <span class="var" data-var="b_2"
+                    data-desc="Second bias vector" style="--var-color: #ff7b72"><span
+                        class="mord mathnormal">b</span><sub>2</sub></span></span></span></span>
+</div>
+
+<p>While the linear transformations are the same across different positions, they use different parameters from layer to
+    layer. The dimensionality of input and output is <span class="var" data-var="d_model"
+        data-desc="Model embedding dimension (d_model = 512)" style="--var-color: #ffd700">d<sub>model</sub></span> =
+    512, and the inner-layer has dimensionality <span class="var" data-var="d_ff"
+        data-desc="Feed-forward inner dimension (d_ff = 2048)" style="--var-color: #f778ba">d<sub>ff</sub></span> =
+    2048.</p>
+
+<h3 id="embeddings">3.4 Embeddings and Softmax</h3>
+
+<p>Similarly to other sequence transduction models, we use learned embeddings to convert the input tokens and output
+    tokens to vectors of dimension <span class="var" data-var="d_model"
+        data-desc="Model embedding dimension (d_model = 512)" style="--var-color: #ffd700">d<sub>model</sub></span>. We
+    also use the usual learned linear transformation and softmax function to convert the decoder output to predicted
+    next-token probabilities. In our model, we share the same weight matrix between the two embedding layers and the
+    pre-softmax linear transformation. In the embedding layers, we multiply those weights by <span class="var"
+        data-var="d_model" data-desc="Model embedding dimension (d_model = 512)"
+        style="--var-color: #ffd700">√d<sub>model</sub></span>.</p>
+
+<h3 id="positional-encoding">3.5 Positional Encoding</h3>
+
+<p>Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the
+    sequence, we must inject some information about the relative or absolute position of the tokens in the sequence. To
+    this end, we add "positional encodings" to the input embeddings at the bottoms of the encoder and decoder stacks.
+    The positional encodings have the same dimension <span class="var" data-var="d_model"
+        data-desc="Model embedding dimension (d_model = 512)" style="--var-color: #ffd700">d<sub>model</sub></span> as
+    the embeddings, so that the two can be summed. We use sine and cosine functions of different frequencies:</p>
+
+<div class="math-display">
+    <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="var" data-var="PE"
+                    data-desc="Positional encoding matrix added to token embeddings" style="--var-color: #56d4dd"><span
+                        class="mord text"><span class="mord">PE</span></span></span><sub>(<span class="var"
+                        data-var="pos" data-desc="Position of the token in the sequence"
+                        style="--var-color: #f0a050">pos</span>, 2<span class="var" data-var="i"
+                        data-desc="Dimension index" style="--var-color: #58a6ff">i</span>)</sub> = sin(<span class="var"
+                    data-var="pos" data-desc="Position of the token in the sequence"
+                    style="--var-color: #f0a050">pos</span> / 10000<sup>2<span class="var" data-var="i"
+                        data-desc="Dimension index" style="--var-color: #58a6ff">i</span>/<span class="var"
+                        data-var="d_model" data-desc="Model embedding dimension (d_model = 512)"
+                        style="--var-color: #ffd700">d<sub>model</sub></span></sup>)</span></span></span>
+</div>
+
+<div class="math-display">
+    <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="var" data-var="PE"
+                    data-desc="Positional encoding matrix added to token embeddings" style="--var-color: #56d4dd"><span
+                        class="mord text"><span class="mord">PE</span></span></span><sub>(<span class="var"
+                        data-var="pos" data-desc="Position of the token in the sequence"
+                        style="--var-color: #f0a050">pos</span>, 2<span class="var" data-var="i"
+                        data-desc="Dimension index" style="--var-color: #58a6ff">i</span>+1)</sub> = cos(<span
+                    class="var" data-var="pos" data-desc="Position of the token in the sequence"
+                    style="--var-color: #f0a050">pos</span> / 10000<sup>2<span class="var" data-var="i"
+                        data-desc="Dimension index" style="--var-color: #58a6ff">i</span>/<span class="var"
+                        data-var="d_model" data-desc="Model embedding dimension (d_model = 512)"
+                        style="--var-color: #ffd700">d<sub>model</sub></span></sup>)</span></span></span>
+</div>
+
+<p>where <span class="var" data-var="pos" data-desc="Position of the token in the sequence"
+        style="--var-color: #f0a050">pos</span> is the position and <span class="var" data-var="i"
+        data-desc="Dimension index" style="--var-color: #58a6ff">i</span> is the dimension. That is, each dimension of
+    the positional encoding corresponds to a sinusoid. The wavelengths form a geometric progression from 2π to 10000 ·
+    2π. We chose this function because we hypothesized it would allow the model to easily learn to attend by relative
+    positions, since for any fixed offset <span class="var" data-var="k" data-desc="Fixed positional offset"
+        style="--var-color: #d4bfff">k</span>, <span class="var" data-var="PE" data-desc="Positional encoding matrix"
+        style="--var-color: #56d4dd">PE<sub>pos+k</sub></span> can be represented as a linear function of <span
+        class="var" data-var="PE" data-desc="Positional encoding matrix"
+        style="--var-color: #56d4dd">PE<sub>pos</sub></span>.</p>
+
+<hr>
+
+<h2 id="why-self-attention">4 Why Self-Attention</h2>
+
+<p>In this section we compare various aspects of self-attention layers to the recurrent and convolutional layers
+    commonly used for mapping one variable-length sequence of symbol representations to another sequence of equal
+    length. We consider three desiderata:</p>
+
+<ol>
+    <li>Total computational complexity per layer.</li>
+    <li>Amount of computation that can be parallelized, as measured by the minimum number of sequential operations
+        required.</li>
+    <li>Path length between long-range dependencies in the network.</li>
+</ol>
+
+<table>
+    <thead>
+        <tr>
+            <th>Layer Type</th>
+            <th>Complexity per Layer</th>
+            <th>Sequential Ops</th>
+            <th>Max Path Length</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Self-Attention</td>
+            <td>O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #f0a050">n</span>² ·
+                <span class="var" data-var="d_model" data-desc="Model embedding dimension"
+                    style="--var-color: #ffd700">d</span>)</td>
+            <td>O(1)</td>
+            <td>O(1)</td>
+        </tr>
+        <tr>
+            <td>Recurrent</td>
+            <td>O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #f0a050">n</span> ·
+                <span class="var" data-var="d_model" data-desc="Model embedding dimension"
+                    style="--var-color: #ffd700">d</span>²)</td>
+            <td>O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #f0a050">n</span>)</td>
+            <td>O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #f0a050">n</span>)</td>
+        </tr>
+        <tr>
+            <td>Convolutional</td>
+            <td>O(<span class="var" data-var="k" data-desc="Kernel width" style="--var-color: #d4bfff">k</span> · <span
+                    class="var" data-var="n" data-desc="Sequence length" style="--var-color: #f0a050">n</span> · <span
+                    class="var" data-var="d_model" data-desc="Model embedding dimension"
+                    style="--var-color: #ffd700">d</span>²)</td>
+            <td>O(1)</td>
+            <td>O(log<sub><span class="var" data-var="k" data-desc="Kernel width"
+                        style="--var-color: #d4bfff">k</span></sub>(<span class="var" data-var="n"
+                    data-desc="Sequence length" style="--var-color: #f0a050">n</span>))</td>
+        </tr>
+        <tr>
+            <td>Self-Attention (restricted)</td>
+            <td>O(<span class="var" data-var="r" data-desc="Neighborhood size for restricted self-attention"
+                    style="--var-color: #a5d6ff">r</span> · <span class="var" data-var="n" data-desc="Sequence length"
+                    style="--var-color: #f0a050">n</span> · <span class="var" data-var="d_model"
+                    data-desc="Model embedding dimension" style="--var-color: #ffd700">d</span>)</td>
+            <td>O(1)</td>
+            <td>O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #f0a050">n</span>/<span
+                    class="var" data-var="r" data-desc="Neighborhood size" style="--var-color: #a5d6ff">r</span>)</td>
+        </tr>
+    </tbody>
+</table>
+
+<hr>
+
+<h2 id="training">5 Training</h2>
+
+<h3 id="training-data">5.1 Training Data and Batching</h3>
+
+<p>We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Sentences
+    were encoded using byte-pair encoding, which has a shared source-target vocabulary of about 37000 tokens. For
+    English-French, we used the significantly larger WMT 2014 English-French dataset consisting of 36M sentences and
+    split tokens into a 32000 word-piece vocabulary. Sentence pairs were batched together by approximate sequence
+    length. Each training batch contained a set of sentence pairs containing approximately 25000 source tokens and 25000
+    target tokens.</p>
+
+<h3 id="hardware">5.2 Hardware and Schedule</h3>
+
+<p>We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described
+    throughout the paper, each training step took about 0.4 seconds. We trained the base models for a total of 100,000
+    steps or 12 hours. For our big models, step time was 1.0 seconds. The big models were trained for 300,000 steps (3.5
+    days).</p>
+
+<h3 id="optimizer">5.3 Optimizer</h3>
+
+<p>We used the Adam optimizer<sup class="ref-badge" data-ref="13"
+        data-title="Adam: A Method for Stochastic Optimization" data-url="https://arxiv.org/abs/1412.6980"
+        data-quote="We introduce Adam, an algorithm for first-order gradient-based optimization of stochastic objective functions.">13</sup>
+    with β₁ = 0.9, β₂ = 0.98 and ε = 10⁻⁹. We varied the learning rate over the course of training, according to the
+    formula:</p>
+
+<div class="math-display">
+    <span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="var"
+                    data-var="lrate" data-desc="Learning rate at the current training step"
+                    style="--var-color: #f0a050"><span class="mord text"><span class="mord">lrate</span></span></span> =
+                <span class="var" data-var="d_model" data-desc="Model embedding dimension (d_model = 512)"
+                    style="--var-color: #ffd700"><span
+                        class="mord mathnormal">d</span><sub>model</sub></span><sup>−0.5</sup> · min(<span class="var"
+                    data-var="step_num" data-desc="Current training step number" style="--var-color: #58a6ff"><span
+                        class="mord text"><span class="mord">step_num</span></span></span><sup>−0.5</sup>, <span
+                    class="var" data-var="step_num" data-desc="Current training step number"
+                    style="--var-color: #58a6ff"><span class="mord text"><span
+                            class="mord">step_num</span></span></span> · <span class="var" data-var="warmup_steps"
+                    data-desc="Number of warmup steps (warmup_steps = 4000)" style="--var-color: #7ee787"><span
+                        class="mord text"><span
+                            class="mord">warmup_steps</span></span></span><sup>−1.5</sup>)</span></span></span>
+</div>
+
+<p>This corresponds to increasing the learning rate linearly for the first <span class="var" data-var="warmup_steps"
+        data-desc="Number of warmup steps (warmup_steps = 4000)" style="--var-color: #7ee787">warmup_steps</span>
+    training steps, and decreasing it thereafter proportionally to the inverse square root of the step number. We used
+    <span class="var" data-var="warmup_steps" data-desc="Number of warmup steps (warmup_steps = 4000)"
+        style="--var-color: #7ee787">warmup_steps</span> = 4000.</p>
+
+<h3 id="regularization">5.4 Regularization</h3>
+
+<p>We employ three types of regularization during training:</p>
+
+<p><strong>Residual Dropout</strong> — We apply dropout to the output of each sub-layer, before it is added to the
+    sub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the positional
+    encodings in both the encoder and decoder stacks. For the base model, we use a rate of <span class="var"
+        data-var="P_drop" data-desc="Dropout probability (P_drop = 0.1)"
+        style="--var-color: #ff7b72">P<sub>drop</sub></span> = 0.1.</p>
+
+<p><strong>Label Smoothing</strong> — During training, we employed label smoothing of value <span class="var"
+        data-var="ε_ls" data-desc="Label smoothing value (ε_ls = 0.1)"
+        style="--var-color: #d2a8ff">ε<sub>ls</sub></span> = 0.1<sup class="ref-badge" data-ref="14"
+        data-title="Rethinking the Inception Architecture for Computer Vision"
+        data-url="https://arxiv.org/abs/1512.00567"
+        data-quote="Label smoothing is a mechanism for regularizing the classifier layer.">14</sup>. This hurts
+    perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.</p>
+
+<hr>
+
+<h2 id="results">6 Results</h2>
+
+<h3 id="machine-translation">6.1 Machine Translation</h3>
+
+<p>On the WMT 2014 English-to-German translation task, the big transformer model (Transformer (big) in Table 2)
+    outperforms the best previously reported models (including ensembles) by more than 2.0 BLEU, establishing a new
+    state-of-the-art BLEU score of <strong>28.4</strong>. The configuration of this model is listed in the bottom line
+    of Table 3.</p>
+
+<table>
+    <thead>
+        <tr>
+            <th>Model</th>
+            <th>EN-DE BLEU</th>
+            <th>EN-FR BLEU</th>
+            <th>Training Cost (FLOPs)</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>ByteNet<sup class="ref-badge" data-ref="10" data-title="Neural Machine Translation in Linear Time"
+                    data-url="https://arxiv.org/abs/1610.10099" data-quote="We present ByteNet.">10</sup></td>
+            <td>23.75</td>
+            <td>—</td>
+            <td>—</td>
+        </tr>
+        <tr>
+            <td>Deep-Att + PosUnk<sup class="ref-badge" data-ref="8"
+                    data-title="Effective Approaches to Attention-based NMT" data-url="https://arxiv.org/abs/1508.04025"
+                    data-quote="We examine attention mechanisms.">8</sup></td>
+            <td>—</td>
+            <td>39.2</td>
+            <td>1.0 × 10²⁰</td>
+        </tr>
+        <tr>
+            <td>GNMT + RL<sup class="ref-badge" data-ref="6" data-title="Google's Neural Machine Translation System"
+                    data-url="https://arxiv.org/abs/1609.08144"
+                    data-quote="Our model consists of a deep LSTM network.">6</sup></td>
+            <td>24.6</td>
+            <td>39.92</td>
+            <td>2.3 × 10¹⁹</td>
+        </tr>
+        <tr>
+            <td>ConvS2S<sup class="ref-badge" data-ref="11" data-title="Convolutional Sequence to Sequence Learning"
+                    data-url="https://arxiv.org/abs/1705.03122"
+                    data-quote="Architecture based entirely on CNNs.">11</sup></td>
+            <td>25.16</td>
+            <td>40.46</td>
+            <td>1.5 × 10²⁰</td>
+        </tr>
+        <tr>
+            <td>MoE<sup class="ref-badge" data-ref="15"
+                    data-title="Outrageously Large Neural Networks: The Sparsely-Gated MoE Layer"
+                    data-url="https://arxiv.org/abs/1701.06538"
+                    data-quote="We introduce a sparsely-gated mixture of experts layer.">15</sup></td>
+            <td>26.03</td>
+            <td>40.56</td>
+            <td>1.2 × 10²⁰</td>
+        </tr>
+        <tr>
+            <td><strong>Transformer (base model)</strong></td>
+            <td>27.3</td>
+            <td>38.1</td>
+            <td><strong>3.3 × 10¹⁸</strong></td>
+        </tr>
+        <tr>
+            <td><strong>Transformer (big)</strong></td>
+            <td><strong>28.4</strong></td>
+            <td><strong>41.8</strong></td>
+            <td>2.3 × 10¹⁹</td>
+        </tr>
+    </tbody>
+</table>
+
+<p>On the WMT 2014 English-to-French translation task, our big model achieves a BLEU score of <strong>41.0</strong>,
+    outperforming all of the previously published single models, at less than 1/4 the training cost of the previous
+    state-of-the-art model. The Transformer (big) model trained for English-to-French used dropout rate <span
+        class="var" data-var="P_drop" data-desc="Dropout probability"
+        style="--var-color: #ff7b72">P<sub>drop</sub></span> = 0.1, instead of 0.3.</p>
+
+<h3 id="model-variations">6.2 Model Variations</h3>
+
+<table>
+    <thead>
+        <tr>
+            <th></th>
+            <th><span class="var" data-var="N" data-desc="Number of layers" style="--var-color: #ff7b72">N</span></th>
+            <th><span class="var" data-var="d_model" data-desc="Model dimension"
+                    style="--var-color: #ffd700">d<sub>model</sub></span></th>
+            <th><span class="var" data-var="d_ff" data-desc="FFN inner dimension"
+                    style="--var-color: #f778ba">d<sub>ff</sub></span></th>
+            <th><span class="var" data-var="h" data-desc="Attention heads" style="--var-color: #ff7b72">h</span></th>
+            <th><span class="var" data-var="d_k" data-desc="Key/query dimension"
+                    style="--var-color: #79c0ff">d<sub>k</sub></span></th>
+            <th><span class="var" data-var="d_v" data-desc="Value dimension"
+                    style="--var-color: #ffa657">d<sub>v</sub></span></th>
+            <th><span class="var" data-var="P_drop" data-desc="Dropout"
+                    style="--var-color: #ff7b72">P<sub>drop</sub></span></th>
+            <th>EN-DE BLEU</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>base</td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>8</td>
+            <td>64</td>
+            <td>64</td>
+            <td>0.1</td>
+            <td>27.3</td>
+        </tr>
+        <tr>
+            <td>(A)</td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>1</td>
+            <td>512</td>
+            <td>512</td>
+            <td>0.1</td>
+            <td>24.9</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>4</td>
+            <td>128</td>
+            <td>128</td>
+            <td>0.1</td>
+            <td>25.5</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>16</td>
+            <td>32</td>
+            <td>32</td>
+            <td>0.1</td>
+            <td>25.8</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>32</td>
+            <td>16</td>
+            <td>16</td>
+            <td>0.1</td>
+            <td>24.9</td>
+        </tr>
+        <tr>
+            <td>(B)</td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>16</td>
+            <td>16</td>
+            <td>16</td>
+            <td>0.1</td>
+            <td>25.4</td>
+        </tr>
+        <tr>
+            <td>(D)</td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>8</td>
+            <td>64</td>
+            <td>64</td>
+            <td>0.0</td>
+            <td>26.4</td>
+        </tr>
+        <tr>
+            <td></td>
+            <td>6</td>
+            <td>512</td>
+            <td>2048</td>
+            <td>8</td>
+            <td>64</td>
+            <td>64</td>
+            <td>0.2</td>
+            <td>27.1</td>
+        </tr>
+        <tr>
+            <td>big</td>
+            <td>6</td>
+            <td>1024</td>
+            <td>4096</td>
+            <td>16</td>
+            <td>64</td>
+            <td>64</td>
+            <td>0.3</td>
+            <td><strong>28.4</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<hr>
+
+<h2 id="conclusion">7 Conclusion</h2>
+
+<p>In this work, we presented the Transformer, the first sequence transduction model based entirely on attention,
+    replacing the recurrent layers most commonly used in encoder-decoder architectures with multi-headed
+    self-attention.<sup class="ref-badge" data-ref="1" data-title="Attention Is All You Need"
+        data-url="https://arxiv.org/abs/1706.03762"
+        data-quote="We propose a new simple network architecture, the Transformer, based solely on attention mechanisms.">1</sup>
+</p>
+
+<p>For translation tasks, the Transformer can be trained significantly faster than architectures based on recurrent or
+    convolutional layers. On both WMT 2014 English-to-German and WMT 2014 English-to-French translation tasks, we
+    achieve a new state of the art. In the former task our best model outperforms even all previously reported
+    ensembles.</p>
+
+<p>We are excited about the future of attention-based models and plan to apply them to other tasks. We plan to extend
+    the Transformer to problems involving input and output modalities other than text and to investigate local,
+    restricted attention mechanisms to efficiently handle large inputs and outputs such as images, audio and video.
+    Making generation less sequential is another research goal of ours.</p>

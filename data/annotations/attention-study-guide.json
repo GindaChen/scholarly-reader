@@ -1,0 +1,26 @@
+[
+  {
+    "id": "c266a2e2",
+    "type": "note",
+    "selectedText": "inant sequenc",
+    "note": "hi",
+    "color": "var(--note-highlight)",
+    "replacementText": "",
+    "anchorSelector": "",
+    "anchorOffset": 0,
+    "createdAt": "2026-02-26T07:59:24.210Z",
+    "updatedAt": "2026-02-26T07:59:24.210Z"
+  },
+  {
+    "id": "19323b2f",
+    "type": "note",
+    "selectedText": "transduction",
+    "note": "ntpe",
+    "color": "var(--note-highlight)",
+    "replacementText": "",
+    "anchorSelector": "",
+    "anchorOffset": 0,
+    "createdAt": "2026-02-26T07:59:32.460Z",
+    "updatedAt": "2026-02-26T07:59:32.460Z"
+  }
+]

@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scholarly Reader</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Crimson+Pro:ital,wght@0,400;0,600;1,400&display=swap"
+        rel="stylesheet">
+
+    <!-- KaTeX CSS only (for pre-rendered math display) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+
+    <!-- Highlight.js theme (for pre-rendered code blocks) -->
+    <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark-dimmed.min.css">
+
+    <link rel="stylesheet" href="reader.css">
+</head>
+
+<body>
+    <!-- ── Reading Progress Bar ── -->
+    <div id="reading-progress"></div>
+
+    <!-- ── Navigation Bar ── -->
+    <header id="navbar">
+        <div class="nav-left">
+            <button class="nav-btn active" id="vars-toggle" title="Toggle Variables Panel">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 7h6M4 17h6M14 4l-4 16M20 7l-4 10" />
+                </svg>
+            </button>
+            <div class="logo">S</div>
+            <div class="doc-picker" id="doc-picker">
+                <button class="doc-picker-trigger" id="doc-picker-trigger" title="Switch Document">
+                    <h1 id="doc-title">Scholarly Reader</h1>
+                    <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                        <path
+                            d="M2.22 4.47a.75.75 0 011.06 0L6 7.19l2.72-2.72a.75.75 0 011.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L2.22 5.53a.75.75 0 010-1.06z" />
+                    </svg>
+                </button>
+                <div class="doc-picker-menu" id="doc-picker-menu"></div>
+            </div>
+            <div class="paper-links-dropdown" id="paper-links-dropdown" style="display:none">
+                <button class="nav-btn" id="paper-links-trigger" title="Paper Links">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                        <polyline points="15 3 21 3 21 9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                    </svg>
+                </button>
+                <div class="paper-links-menu" id="paper-links-menu"></div>
+            </div>
+        </div>
+        <div class="nav-center">
+            <div class="toc-dropdown" id="toc-dropdown">
+                <button class="toc-trigger" id="toc-trigger" title="Table of Contents (T)">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path
+                            d="M1 2.75A.75.75 0 011.75 2h12.5a.75.75 0 010 1.5H1.75A.75.75 0 011 2.75zm0 5A.75.75 0 011.75 7h12.5a.75.75 0 010 1.5H1.75A.75.75 0 011 7.75zM1.75 12a.75.75 0 000 1.5h12.5a.75.75 0 000-1.5H1.75z" />
+                    </svg>
+                    <span>Contents</span>
+                    <svg class="chevron" width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+                        <path
+                            d="M2.22 4.47a.75.75 0 011.06 0L6 7.19l2.72-2.72a.75.75 0 011.06 1.06l-3.25 3.25a.75.75 0 01-1.06 0L2.22 5.53a.75.75 0 010-1.06z" />
+                    </svg>
+                </button>
+                <div class="toc-menu" id="toc-menu"></div>
+            </div>
+        </div>
+        <div class="nav-right">
+            <button class="nav-btn" id="refs-toggle" title="Toggle References Panel">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path
+                        d="M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5A2.5 2.5 0 016.5 17H20M4 19.5V5a2 2 0 012-2h14v14H6.5" />
+                </svg>
+            </button>
+            <button class="nav-btn" id="notes-toggle" title="My Notes">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+            </button>
+            <button class="nav-btn" id="history-toggle" title="Edit History Tree">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
+            <span class="nav-sep"></span>
+            <button class="nav-btn" id="undo-btn" title="Undo (⌘Z)" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="1 4 1 10 7 10" />
+                    <path d="M3.51 15a9 9 0 102.13-9.36L1 10" />
+                </svg>
+            </button>
+            <button class="nav-btn" id="redo-btn" title="Redo (⌘⇧Z)" disabled>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10" />
+                    <path d="M20.49 15a9 9 0 11-2.13-9.36L23 10" />
+                </svg>
+            </button>
+            <button class="nav-btn" id="eraser-btn" title="Remove highlights (click to toggle)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 20H7L3 16l8-8 9 9-4 3z" />
+                    <path d="M6 11l4 4" />
+                </svg>
+            </button>
+            <div class="settings-dropdown" id="settings-dropdown">
+                <button class="nav-btn" id="settings-toggle" title="Settings">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                    </svg>
+                </button>
+                <div class="settings-menu">
+                    <div class="settings-label">Theme</div>
+                    <div class="theme-grid">
+                        <button class="theme-btn active" data-theme="midnight" title="Midnight Theme">
+                            <span class="theme-swatch"
+                                style="background: linear-gradient(135deg, #0d1117, #161b22)"></span>
+                            Midnight
+                        </button>
+                        <button class="theme-btn" data-theme="parchment" title="Parchment Theme">
+                            <span class="theme-swatch"
+                                style="background: linear-gradient(135deg, #f5f0e8, #ebe5d8)"></span>
+                            Parchment
+                        </button>
+                        <button class="theme-btn" data-theme="ocean" title="Ocean Theme">
+                            <span class="theme-swatch"
+                                style="background: linear-gradient(135deg, #0a192f, #112240)"></span>
+                            Ocean
+                        </button>
+                        <button class="theme-btn" data-theme="forest" title="Forest Theme">
+                            <span class="theme-swatch"
+                                style="background: linear-gradient(135deg, #1a1f16, #222b1d)"></span>
+                            Forest
+                        </button>
+                    </div>
+
+                    <div class="settings-sep"></div>
+                    <div class="settings-label">Typography</div>
+                    <div class="typo-row">
+                        <button class="typo-btn active" data-font="serif" title="Serif">Aa</button>
+                        <button class="typo-btn" data-font="sans" title="Sans-Serif">Aa</button>
+                        <button class="typo-btn" data-font="mono" title="Monospace">Aa</button>
+                    </div>
+                    <div class="typo-row">
+                        <button class="typo-size-btn" data-size="sm" title="Small Text">S</button>
+                        <button class="typo-size-btn active" data-size="md" title="Medium Text">M</button>
+                        <button class="typo-size-btn" data-size="lg" title="Large Text">L</button>
+                        <button class="typo-size-btn" data-size="xl" title="Extra Large Text">XL</button>
+                    </div>
+
+                    <div class="settings-sep"></div>
+                    <div class="settings-label">Figures</div>
+                    <div class="fig-width-row">
+                        <span class="fig-width-label" id="fig-width-label">Max 400px</span>
+                        <input type="range" class="fig-width-slider" id="fig-width-slider" min="200" max="1000"
+                            step="50" value="400" />
+                    </div>
+
+                    <div class="settings-sep"></div>
+                    <div class="settings-label">View</div>
+                    <button class="ctx-item" id="focus-mode-toggle" title="Focus Mode (F)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path
+                                d="M8 3H5a2 2 0 00-2 2v3m18 0V5a2 2 0 00-2-2h-3m0 18h3a2 2 0 002-2v-3M3 16v3a2 2 0 002 2h3" />
+                        </svg>
+                        Focus Mode <span style="margin-left:auto;opacity:0.4;font-size:11px">F</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Three-Panel Layout ── -->
+    <div class="layout">
+        <!-- Left Panel: Variable Definitions + Equations -->
+        <aside class="panel-left" id="panel-left">
+            <div class="panel-header">
+                <div class="panel-tabs">
+                    <button class="panel-tab active" data-tab="vars" title="Variables">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M4 7h6M4 17h6M14 4l-4 16M20 7l-4 10" />
+                        </svg>
+                        Variables
+                    </button>
+                    <button class="panel-tab" data-tab="equations" title="Equations">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M3 12h4l3-9 4 18 3-9h4" />
+                        </svg>
+                        Equations
+                    </button>
+                </div>
+                <button class="panel-collapse" id="panel-left-close" title="Collapse">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="15 18 9 12 15 6" />
+                    </svg>
+                </button>
+            </div>
+            <div class="panel-body panel-tab-content active" id="vars-body" data-tab="vars">
+                <p class="panel-empty">No variables defined.</p>
+            </div>
+            <div class="panel-body panel-tab-content" id="equations-body" data-tab="equations">
+                <p class="panel-empty">No equations found.</p>
+            </div>
+        </aside>
+
+        <!-- Center: Article Content -->
+        <main id="article-wrapper">
+            <div class="split-controls" id="split-controls">
+                <button class="split-btn" id="btn-split-orientation"
+                    title="Toggle split direction (horizontal / vertical)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="3" x2="12" y2="21"></line>
+                    </svg>
+                </button>
+                <button class="split-btn" id="btn-add-split" title="Add Split View">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add Split
+                </button>
+            </div>
+
+            <div id="split-container" class="split-container">
+                <!-- Original primary view -->
+                <div class="split-view primary-view" id="split-0">
+                    <div class="split-view-header">
+                        <span class="split-title">Main View</span>
+                    </div>
+                    <div class="split-content" id="article">
+                        <div class="loading-state" id="loading-state">
+                            <div class="loading-spinner"></div>
+                            <p>Loading document…</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Annotation minimap — thin vertical strip showing positions of annotations -->
+            <div id="annotation-minimap" class="annotation-minimap"></div>
+        </main>
+
+        <!-- Right Panel: References -->
+        <aside class="panel-right" id="panel-refs">
+            <div class="resize-handle" id="resize-handle-refs"></div>
+            <div class="panel-header">
+                <h3>References</h3>
+                <button class="panel-collapse" id="panel-refs-close" title="Collapse">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                </button>
+            </div>
+            <div class="panel-body">
+                <div id="ref-detail-view"></div>
+                <ul class="ref-list" id="ref-list"></ul>
+            </div>
+        </aside>
+
+        <!-- Far-Right Panel: Notes -->
+        <aside class="panel-notes" id="panel-notes">
+            <div class="resize-handle" id="resize-handle-notes"></div>
+            <div class="panel-header">
+                <h3>Notes</h3>
+                <button class="panel-collapse" id="panel-notes-close" title="Collapse">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                </button>
+            </div>
+            <div class="panel-body">
+                <div id="notes-list">
+                    <p class="panel-empty">Select text to add a note.</p>
+                </div>
+            </div>
+        </aside>
+        <!-- Far-Far-Right Panel: Edit History Tree -->
+        <aside class="panel-history" id="panel-history">
+            <div class="resize-handle" id="resize-handle-history"></div>
+            <div class="panel-header">
+                <h3>Edit History</h3>
+                <button class="panel-collapse" id="panel-history-close" title="Collapse">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                </button>
+            </div>
+            <div class="panel-body">
+                <div id="history-tree-container"></div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- ── Selection Toolbar ── -->
+    <div class="selection-toolbar" id="selection-toolbar">
+        <button class="sel-btn" id="sel-copy" title="Copy">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+            </svg>
+            Copy
+        </button>
+        <span class="sel-sep"></span>
+        <button class="sel-btn sel-hl" id="sel-hl-bg" title="Highlight" data-hl="background">
+            <span class="sel-hl-swatch" style="background:#ffd70066"></span>
+        </button>
+        <button class="sel-btn sel-hl" id="sel-hl-bold" title="Bold" data-hl="bold">
+            <strong>B</strong>
+        </button>
+        <button class="sel-btn sel-hl" id="sel-hl-underline" title="Underline" data-hl="underline">
+            <u>U</u>
+        </button>
+        <span class="sel-sep"></span>
+        <button class="sel-btn" id="sel-collapse" title="Collapse Text">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="4 14 10 14 10 20" />
+                <polyline points="20 10 14 10 14 4" />
+                <line x1="14" y1="10" x2="21" y2="3" />
+                <line x1="3" y1="21" x2="10" y2="14" />
+            </svg>
+        </button>
+        <button class="sel-btn sel-btn-primary" id="sel-note" title="Add Note">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+            Note
+        </button>
+        <button class="sel-btn sel-btn-ai" id="sel-explain" title="Explain this with AI">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            Explain
+        </button>
+    </div>
+
+    <!-- ── Context Menu (right-click on vars/refs) ── -->
+    <div class="ctx-menu" id="ctx-menu"></div>
+
+    <!-- ── Edit Modal ── -->
+    <div class="edit-overlay" id="edit-overlay">
+        <div class="edit-modal">
+            <h4 id="edit-title">Edit</h4>
+            <div class="edit-label" id="edit-label"></div>
+            <textarea id="edit-textarea" placeholder="Type here…"></textarea>
+            <div class="edit-actions">
+                <button class="edit-btn-cancel" id="edit-cancel">Cancel</button>
+                <button class="edit-btn-save" id="edit-save">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── AI Chat Widget ── -->
+    <div class="chat-widget" id="chat-widget">
+        <button class="chat-toggle" id="chat-toggle" title="Ask AI about this paper">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+        </button>
+        <div class="chat-panel" id="chat-panel">
+            <div class="chat-header">
+                <span>Ask AI</span>
+                <button class="chat-close" id="chat-close" title="Close">×</button>
+            </div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="chat-msg assistant">Ask me anything about this paper. You can also select text and click
+                    "Explain this" from the toolbar.</div>
+            </div>
+            <div class="chat-input-row">
+                <input type="text" class="chat-input" id="chat-input" placeholder="Ask about the paper…"
+                    autocomplete="off" />
+                <button class="chat-send" id="chat-send" title="Send">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── ArXiv Import Modal ── -->
+    <div class="import-overlay" id="import-overlay" style="display:none">
+        <div class="import-modal">
+            <h4>Import from arXiv</h4>
+            <p class="import-desc">Paste an arXiv ID or URL to download and convert a paper.</p>
+            <input type="text" class="import-input" id="import-input"
+                placeholder="e.g. 2301.10226 or https://arxiv.org/abs/2301.10226" autocomplete="off" />
+            <div class="import-progress" id="import-progress" style="display:none">
+                <div class="loading-spinner" style="width:16px;height:16px;border-width:2px;"></div>
+                <span id="import-progress-text">Starting...</span>
+            </div>
+            <div class="import-actions">
+                <button class="edit-btn-cancel" id="import-cancel">Cancel</button>
+                <button class="edit-btn-save" id="import-submit">Import</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="reader.js"></script>
+</body>
+
+</html>

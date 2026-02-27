@@ -1,0 +1,81 @@
+# Document metadata — Scholarly Reader
+# Schema follows Zotero-compatible bibliographic fields
+
+title: "Attention Is All You Need"
+short_title: "Attention Paper"
+type: journal-article
+
+# Authors
+authors:
+  - given: Ashish
+    family: Vaswani
+    affiliation: Google Brain
+  - given: Noam
+    family: Shazeer
+    affiliation: Google Brain
+  - given: Niki
+    family: Parmar
+    affiliation: Google Research
+  - given: Jakob
+    family: Uszkoreit
+    affiliation: Google Research
+  - given: Llion
+    family: Jones
+    affiliation: Google Research
+  - given: Aidan N.
+    family: Gomez
+    affiliation: University of Toronto
+  - given: Łukasz
+    family: Kaiser
+    affiliation: Google Brain
+  - given: Illia
+    family: Polosukhin
+
+# Publication
+date: 2017-06-12
+year: 2017
+conference: NeurIPS 2017
+venue: "31st Conference on Neural Information Processing Systems"
+publisher: NeurIPS
+
+# Links
+url: "https://arxiv.org/abs/1706.03762"
+pdf: "https://arxiv.org/pdf/1706.03762"
+doi: "10.48550/arXiv.1706.03762"
+arxiv_id: "1706.03762"
+code: "https://github.com/tensorflow/tensor2tensor"
+
+# Archive
+archive: arxiv
+archive_url: "https://arxiv.org/abs/1706.03762"
+semantic_scholar: "https://www.semanticscholar.org/paper/204e3073870fae3d05bcbc2f6a8e263d9b72e776"
+
+# Classification
+tags:
+  - transformers
+  - attention
+  - sequence-to-sequence
+  - machine-translation
+  - deep-learning
+abstract: >
+  The dominant sequence transduction models are based on complex recurrent or
+  convolutional neural networks that include an encoder and a decoder. The best
+  performing models also connect the encoder and decoder through an attention
+  mechanism. We propose a new simple network architecture, the Transformer,
+  based solely on attention mechanisms, dispensing with recurrence and
+  convolutions entirely.
+
+# Document files in this folder
+files:
+  - name: paper.html
+    format: html
+    description: "Full annotated paper with variable highlighting and KaTeX math"
+    primary: true
+  - name: paper.md
+    format: markdown
+    description: "Markdown version with @var-region/@var-defs annotation directives"
+
+# Reader-specific
+variable_count: 33
+equation_count: 6
+reference_count: 15

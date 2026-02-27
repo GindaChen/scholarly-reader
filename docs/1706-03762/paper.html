@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention Is All You Need</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<style>
+  /* ── Base ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d1117; --surface: #161b22; --border: #30363d;
+    --text: #c9d1d9; --text-dim: #8b949e; --text-bright: #f0f6fc;
+    --accent: #58a6ff; --accent2: #56d4dd;
+    --c1:#f0a050;--c2:#58a6ff;--c3:#56d4dd;--c4:#7ee787;
+    --c5:#ffd700;--c6:#d2a8ff;--c7:#ff7b72;--c8:#79c0ff;
+    --c9:#ff9bce;--c10:#a5d6ff;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-size: 17px; line-height: 1.8;
+    max-width: 860px; margin: 0 auto; padding: 2rem 1.5rem 6rem;
+  }
+  /* ── Typography ── */
+  h1 { font-size: 2.1rem; line-height: 1.25; color: var(--text-bright); margin-bottom: 1rem; font-weight: 700; }
+  h2 { font-size: 1.5rem; color: var(--accent); margin: 2.8rem 0 0.8rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.2rem; color: var(--accent2); margin: 2rem 0 0.5rem; }
+  h4 { font-size: 1rem; color: var(--c5); margin: 1.5rem 0 0.4rem; font-style: italic; }
+  p { margin-bottom: 1.1rem; }
+  p.authors { color: var(--text-dim); font-style: italic; font-size: 1rem; margin-bottom: 0.3rem; }
+  p.affiliations { color: var(--text-dim); font-size: 0.88rem; margin-bottom: 1.5rem; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+  strong { color: var(--text-bright); }
+  em { color: #e3b67a; font-style: italic; }
+  ul, ol { margin: 0.5rem 0 1rem 1.8rem; }
+  li { margin-bottom: 0.4rem; }
+  code { background: #1c2128; border: 1px solid var(--border); border-radius: 4px; padding: 0.1em 0.35em; font-family: 'Fira Code', monospace; font-size: 0.85em; color: var(--c3); }
+
+  /* ── Math ── */
+  .math-display { overflow-x: auto; padding: 1.2rem 1rem; margin: 1.2rem 0;
+    background: #161b22; border-left: 3px solid var(--accent); border-radius: 0 6px 6px 0; }
+  .math-inline { white-space: nowrap; }
+  .katex-display { margin: 0 !important; }
+
+  /* ── Variables ── */
+  .var {
+    display: inline-block;
+    border-radius: 3px;
+    padding: 0 2px;
+    font-style: italic;
+    cursor: help;
+    border-bottom: 2px solid;
+    border-color: var(--var-color, #58a6ff);
+    color: var(--var-color, #58a6ff);
+    transition: background 0.15s;
+    position: relative;
+  }
+  .var:hover { background: color-mix(in srgb, var(--var-color, #58a6ff) 18%, transparent); }
+  .var::after {
+    content: attr(data-desc);
+    position: absolute; bottom: 130%; left: 50%; transform: translateX(-50%);
+    background: #21262d; border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.4em 0.7em; font-size: 0.8rem; font-style: normal;
+    white-space: nowrap; color: var(--text); opacity: 0; pointer-events: none;
+    transition: opacity 0.2s; z-index: 999; max-width: 320px; white-space: normal;
+    text-align: center;
+  }
+  .var:hover::after { opacity: 1; }
+
+  /* ── Figures ── */
+  figure { margin: 2rem 0; text-align: center; }
+  figure img { max-width: 100%; border-radius: 8px;
+    border: 1px solid var(--border); background: #fff; padding: 6px; }
+  figcaption { margin-top: 0.7rem; font-size: 0.88rem; color: var(--text-dim); font-style: italic; text-align: left; }
+  figcaption strong { color: var(--text); font-style: normal; }
+
+  /* ── Tables ── */
+  .article-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.88rem; }
+  .article-table th { background: #1c2128; color: var(--text-bright); padding: 0.5rem 0.8rem; border: 1px solid var(--border); text-align: center; }
+  .article-table td { padding: 0.45rem 0.8rem; border: 1px solid var(--border); text-align: center; }
+  .article-table tr:hover td { background: #1c2128; }
+  .article-table .model-best td { color: var(--c4); font-weight: bold; }
+  .table-caption { font-size: 0.88rem; color: var(--text-dim); font-style: italic; margin-bottom: 0.4rem; }
+
+  /* ── Citations & Cross-refs ── */
+  sup.ref-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: #1c2128; border: 1px solid var(--border); border-radius: 4px;
+    padding: 0 5px; font-size: 0.72rem; color: var(--accent); cursor: default;
+    margin: 0 1px; line-height: 1.5; vertical-align: super;
+    transition: background 0.15s;
+  }
+  sup.ref-badge:hover { background: #2d333b; }
+  a.cross-ref { color: var(--c3); text-decoration: underline dotted; }
+
+  /* ── References ── */
+  ol.references { list-style: decimal; padding-left: 2rem; }
+  ol.references li { margin-bottom: 0.7rem; font-size: 0.9rem; color: var(--text-dim); }
+  ol.references li strong { color: var(--text); }
+
+  /* ── Notice banner ── */
+  .notice { background: #161b22; border: 1px solid #f0a05044; border-radius: 8px;
+    padding: 0.8rem 1.2rem; font-size: 0.88rem; color: #f0a050; margin-bottom: 1.5rem; }
+
+  /* ── Section labels ── */
+  .section-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em;
+    color: var(--text-dim); margin-bottom: 0.2rem; }
+
+  /* ── Footnote ── */
+  .footnote { font-size: 0.82rem; color: var(--text-dim); border-top: 1px solid var(--border); margin-top: 1rem; padding-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="notice">
+  ⚠️ Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in journalistic or scholarly works.
+</div>
+
+<h1>Attention Is All You Need</h1>
+
+<p class="authors">
+  Ashish Vaswani<sup>†‡</sup>, Noam Shazeer<sup>†‡</sup>, Niki Parmar<sup>†★</sup>, Jakob Uszkoreit<sup>†★</sup>,
+  Llion Jones<sup>†★</sup>, Aidan N. Gomez<sup>†♦</sup>, Łukasz Kaiser<sup>†‡</sup>, Illia Polosukhin<sup>†◆</sup>
+</p>
+<p class="affiliations">
+  ‡ Google Brain &nbsp;|&nbsp; ★ Google Research &nbsp;|&nbsp; ♦ University of Toronto
+  <br>
+  <sup>†</sup>Equal contribution. Code: <a href="https://github.com/tensorflow/tensor2tensor">github.com/tensorflow/tensor2tensor</a>
+</p>
+
+<h2>Abstract</h2>
+<p>
+  The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the <strong>Transformer</strong>, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves <strong>28.4 BLEU</strong> on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of <strong>41.8</strong> after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.
+</p>
+
+<hr>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>1. Introduction</h2>
+
+<p>
+  Recurrent neural networks, long short-term memory <sup class="ref-badge" data-ref="13" data-title="Long Short-Term Memory">13</sup> and gated recurrent <sup class="ref-badge" data-ref="7" data-title="Empirical Evaluation of Gated Recurrent Neural Networks">7</sup> neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation <sup class="ref-badge" data-ref="35" data-title="Sequence to Sequence Learning with Neural Networks">35</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="5" data-title="Learning Phrase Representations using RNN Encoder-Decoder">5</sup>. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures <sup class="ref-badge" data-ref="42" data-title="Google's Neural Machine Translation System">42</sup><sup class="ref-badge" data-ref="25" data-title="Effective Approaches to Attention-based NMT">25</sup><sup class="ref-badge" data-ref="16" data-title="Exploring the Limits of Language Modeling">16</sup>.
+</p>
+
+<p>
+  Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden states <span class="math-inline" data-raw="h_t"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">h_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>,
+  as a function of the previous hidden state <span class="math-inline" data-raw="h_{t-1}"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9028em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span></span>
+  and the input for position <span class="var" data-var="t" data-desc="Time step / sequence position index" style="--var-color:#f0a050">t</span>. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples.
+  Recent work has achieved significant improvements in computational efficiency through factorization tricks <sup class="ref-badge" data-ref="22" data-title="Factorization Tricks for LSTM Networks">22</sup> and conditional computation <sup class="ref-badge" data-ref="33" data-title="Outrageously Large Neural Networks: Sparsely-Gated MoE">33</sup>, while also improving model performance in case of the latter. The fundamental constraint of sequential computation, however, remains.
+</p>
+
+<p>
+  Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences <sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="19" data-title="Structured Attention Networks">19</sup>. In all but a few cases <sup class="ref-badge" data-ref="29" data-title="A Decomposable Attention Model">29</sup>, however, such attention mechanisms are used in conjunction with a recurrent network.
+</p>
+
+<p>
+  In this work we propose the <strong>Transformer</strong>, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>2. Background</h2>
+
+<p>
+  The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU <sup class="ref-badge" data-ref="17" data-title="Can Active Memory Replace Attention?">17</sup>, ByteNet <sup class="ref-badge" data-ref="21" data-title="Neural Machine Translation in Linear Time">21</sup> and ConvS2S <sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup>, all of which use convolutional neural networks as basic building block, computing hidden representations in parallel for all input and output positions. In these models, the number of operations required to relate signals from two arbitrary input or output positions grows in the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes it more difficult to learn dependencies between distant positions <sup class="ref-badge" data-ref="12" data-title="Gradient Flow in Recurrent Nets">12</sup>. In the Transformer this is reduced to a constant number of operations, albeit at the cost of reduced effective resolution due to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as described in <a href="#sec-attention" class="cross-ref">Section 3.2</a>.
+</p>
+
+<p>
+  Self-attention, sometimes called intra-attention, is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. Self-attention has been used successfully in a variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning task-independent sentence representations <sup class="ref-badge" data-ref="4" data-title="Long Short-Term Memory-Networks for Machine Reading">4</sup><sup class="ref-badge" data-ref="29" data-title="A Decomposable Attention Model">29</sup><sup class="ref-badge" data-ref="30" data-title="A Deep Reinforced Model for Abstractive Summarization">30</sup><sup class="ref-badge" data-ref="24" data-title="A Structured Self-Attentive Sentence Embedding">24</sup>.
+</p>
+
+<p>
+  End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-aligned recurrence and have been shown to perform well on simple-language question answering and language modeling tasks <sup class="ref-badge" data-ref="36" data-title="End-to-End Memory Networks">36</sup>.
+</p>
+
+<p>
+  To the best of our knowledge, however, the Transformer is the first transduction model relying entirely on self-attention to compute representations of its input and output without using sequence-aligned RNNs or convolution. In the following sections, we will describe the Transformer, motivate self-attention and discuss its advantages over models such as <sup class="ref-badge" data-ref="18" data-title="Neural GPUs Learn Algorithms">18</sup><sup class="ref-badge" data-ref="21" data-title="Neural Machine Translation in Linear Time">21</sup> and <sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup>.
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>3. Model Architecture</h2>
+
+<p>
+  Most competitive neural sequence transduction models have an encoder-decoder structure <sup class="ref-badge" data-ref="5" data-title="Learning Phrase Representations using RNN Encoder-Decoder">5</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="35" data-title="Sequence to Sequence Learning with Neural Networks">35</sup>. Here, the encoder maps an input sequence of symbol representations
+  (<span class="var" data-var="x_1" data-desc="First input symbol representation (a vector)" style="--var-color:#f0a050">x<sub>1</sub></span>, …, <span class="var" data-var="x_n" data-desc="Last input symbol representation at position n" style="--var-color:#f0a050">x<sub>n</sub></span>)
+  to a sequence of continuous representations
+  <strong>z</strong> = (<span class="var" data-var="z_1" data-desc="First element of continuous encoder representation" style="--var-color:#56d4dd">z<sub>1</sub></span>, …, <span class="var" data-var="z_n" data-desc="Last element of continuous encoder representation" style="--var-color:#56d4dd">z<sub>n</sub></span>).
+  Given <strong>z</strong>, the decoder then generates an output sequence
+  (<span class="var" data-var="y_1" data-desc="First output symbol generated autoregressively" style="--var-color:#7ee787">y<sub>1</sub></span>, …, <span class="var" data-var="y_m" data-desc="Last output symbol; m is the output length" style="--var-color:#7ee787">y<sub>m</sub></span>)
+  of symbols one element at a time. At each step the model is auto-regressive <sup class="ref-badge" data-ref="10" data-title="Generating Sequences with Recurrent Neural Networks">10</sup>, consuming the previously generated symbols as additional input when generating the next.
+</p>
+
+<p>
+  The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers for both the encoder and decoder, shown in the left and right halves of <a href="#fig-model-arch" class="cross-ref">Figure 1</a>, respectively.
+</p>
+
+<figure id="fig-model-arch">
+  <img src="./figures/ModalNet-21.png" alt="The Transformer model architecture" loading="lazy" style="max-width:90%">
+  <figcaption><strong>Figure 1.</strong> The Transformer — model architecture. The encoder (left) and decoder (right) are both composed of stacks of identical layers with self-attention and feed-forward sub-layers.</figcaption>
+</figure>
+
+<h3 id="sec-enc-dec">3.1 Encoder and Decoder Stacks</h3>
+
+<h4>Encoder:</h4>
+<p>
+  The encoder is composed of a stack of <span class="var" data-var="N" data-desc="Number of identical layers in the encoder/decoder stack (default: 6)" style="--var-color:#ffd700">N</span>=6 identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network. We employ a residual connection <sup class="ref-badge" data-ref="11" data-title="Deep Residual Learning for Image Recognition">11</sup> around each of the two sub-layers, followed by layer normalization <sup class="ref-badge" data-ref="1" data-title="Layer Normalization">1</sup>. That is, the output of each sub-layer is:
+</p>
+<div class="math-display" data-raw="\mathrm{LayerNorm}(x + \mathrm{Sublayer}(x))">
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">L</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">y</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">N</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">r</mi><mi mathvariant="normal">m</mi></mrow><mo stretchy="false">(</mo><mi>x</mi><mo>+</mo><mrow><mi mathvariant="normal">S</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">b</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">y</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">r</mi></mrow><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{LayerNorm}(x + \mathrm{Sublayer}(x))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">LayerNorm</span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">Sublayer</span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">))</span></span></span></span></span>
+</div>
+<p>
+  where Sublayer(<span class="var" data-var="x" data-desc="Input to a sub-layer (embedding vector or hidden state)" style="--var-color:#f0a050">x</span>) is the function implemented by the sub-layer itself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding layers, produce outputs of dimension <span class="math-inline" data-raw="d_{\text{model}}=512"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">model</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord">512</span></span></span></span></span>.
+</p>
+
+<h4>Decoder:</h4>
+<p>
+  The decoder is also composed of a stack of <span class="var" data-var="N" data-desc="Number of identical layers in the encoder/decoder stack (default: 6)" style="--var-color:#ffd700">N</span>=6 identical layers. In addition to the two sub-layers in each encoder layer, the decoder inserts a third sub-layer, which performs multi-head attention over the output of the encoder stack. Similar to the encoder, we employ residual connections around each of the sub-layers, followed by layer normalization. We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending to subsequent positions. This masking, combined with the fact that the output embeddings are offset by one position, ensures that the predictions for position <span class="var" data-var="i" data-desc="Current decoder output position index" style="--var-color:#56d4dd">i</span> can depend only on the known outputs at positions less than <span class="var" data-var="i" data-desc="Current decoder output position index" style="--var-color:#56d4dd">i</span>.
+</p>
+
+<h3 id="sec-attention">3.2 Attention</h3>
+
+<p>
+  An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.
+</p>
+
+<h4>3.2.1 Scaled Dot-Product Attention</h4>
+
+<figure id="fig-multi-head-att">
+  <div style="display:flex; gap:2rem; justify-content:center; flex-wrap:wrap;">
+    <div style="text-align:center">
+      <p style="font-size:0.9rem; margin-bottom:0.5rem; color:var(--text-dim)">Scaled Dot-Product Attention</p>
+      <img src="./figures/ModalNet-19.png" alt="Scaled Dot-Product Attention diagram" loading="lazy" style="max-height:280px">
+    </div>
+    <div style="text-align:center">
+      <p style="font-size:0.9rem; margin-bottom:0.5rem; color:var(--text-dim)">Multi-Head Attention</p>
+      <img src="./figures/ModalNet-20.png" alt="Multi-Head Attention diagram" loading="lazy" style="max-height:280px">
+    </div>
+  </div>
+  <figcaption><strong>Figure 2.</strong> (left) Scaled Dot-Product Attention. (right) Multi-Head Attention consists of several attention layers running in parallel.</figcaption>
+</figure>
+
+<p>
+  We call our particular attention "Scaled Dot-Product Attention" (see <a href="#fig-multi-head-att" class="cross-ref">Figure 2</a>, left). The input consists of queries and keys of dimension <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span>, and values of dimension <span class="var" data-var="d_v" data-desc="Dimension of value vectors (default: 64)" style="--var-color:#56d4dd">d<sub>v</sub></span>. We compute the dot products of the query with all keys, divide each by <span class="math-inline" data-raw="\sqrt{d_k}"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.04em;vertical-align:-0.1828em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8572em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.8172em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429c69,-144,104.5,-217.7,106.5,-221l0 -0c5.3,-9.3,12,-14,20,-14H400000v40H845.2724s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47zM834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1828em;"><span></span></span></span></span></span></span></span></span></span>,
+  and apply a softmax function to obtain the weights on the values.
+</p>
+
+<p>
+  In practice, we compute the attention function on a set of queries simultaneously, packed together into a matrix <span class="var" data-var="Q" data-desc="Query matrix — packed query vectors (shape: seq_len × d_k)" style="--var-color:#f0a050">Q</span>. The keys and values are also packed together into matrices <span class="var" data-var="K" data-desc="Key matrix — packed key vectors (shape: seq_len × d_k)" style="--var-color:#58a6ff">K</span> and <span class="var" data-var="V" data-desc="Value matrix — packed value vectors (shape: seq_len × d_v)" style="--var-color:#56d4dd">V</span>. We compute the matrix of outputs as:
+</p>
+
+<div class="math-display" data-raw="\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\!\left(\frac{QK^T}{\sqrt{d_k}}\right)V">
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">A</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">n</mi></mrow><mo stretchy="false">(</mo><mi>Q</mi><mo separator="true">,</mo><mi>K</mi><mo separator="true">,</mo><mi>V</mi><mo stretchy="false">)</mo><mo>=</mo><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">f</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">x</mi></mrow><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mfrac><mrow><mi>Q</mi><msup><mi>K</mi><mi>T</mi></msup></mrow><msqrt><msub><mi>d</mi><mi>k</mi></msub></msqrt></mfrac><mo fence="true">)</mo></mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\!\left(\frac{QK^T}{\sqrt{d_k}}\right)V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">Attention</span></span><span class="mopen">(</span><span class="mord mathnormal">Q</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.4684em;vertical-align:-0.95em;"></span><span class="mord"><span class="mord mathrm">softmax</span></span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.5183em;"><span style="top:-2.2528em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8572em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.8172em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429c69,-144,104.5,-217.7,106.5,-221l0 -0c5.3,-9.3,12,-14,20,-14H400000v40H845.2724s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47zM834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1828em;"><span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.93em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">)</span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span>
+</div>
+
+<p>
+  The two most commonly used attention functions are additive attention <sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup>, and dot-product (multiplicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor of <span class="math-inline" data-raw="\frac{1}{\sqrt{d_k}}"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3831em;vertical-align:-0.538em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.5864em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord sqrt mtight"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8622em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mtight" style="padding-left:0.833em;"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.8222em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail mtight" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429c69,-144,104.5,-217.7,106.5,-221l0 -0c5.3,-9.3,12,-14,20,-14H400000v40H845.2724s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47zM834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1778em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.538em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>. Additive attention computes the compatibility function using a feed-forward network with a single hidden layer. While the two are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice, since it can be implemented using highly optimized matrix multiplication code.
+</p>
+
+<p>
+  While for small values of <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span> the two mechanisms perform similarly, additive attention outperforms dot product attention without scaling for larger values of <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span> <sup class="ref-badge" data-ref="3" data-title="Massive Exploration of Neural Machine Translation Architectures">3</sup>. We suspect that for large values of <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span>, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients.<sup>*</sup> To counteract this effect, we scale the dot products by <span class="math-inline" data-raw="\frac{1}{\sqrt{d_k}}"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3831em;vertical-align:-0.538em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.5864em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord sqrt mtight"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8622em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mtight" style="padding-left:0.833em;"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3488em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1512em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.8222em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail mtight" style="min-width:0.853em;height:1.08em;"><svg xmlns="http://www.w3.org/2000/svg" width="400em" height="1.08em" viewBox="0 0 400000 1080" preserveAspectRatio="xMinYMin slice"><path d="M95,702c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429c69,-144,104.5,-217.7,106.5,-221l0 -0c5.3,-9.3,12,-14,20,-14H400000v40H845.2724s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47zM834 80h400000v40h-400000z"/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1778em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.538em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>.
+</p>
+<p class="footnote">* To illustrate why the dot products get large, assume that the components of <span class="var" data-var="q" data-desc="Individual query vector (d_k-dimensional)" style="--var-color:#f0a050">q</span> and <span class="var" data-var="k" data-desc="Individual key vector (d_k-dimensional)" style="--var-color:#58a6ff">k</span> are independent random variables with mean 0 and variance 1. Then their dot product, <span class="math-inline" data-raw="q \cdot k = \sum_{i=1}^{d_k} q_i k_i"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mop">∑</span><span class="mord mathnormal">q</span><sub>i</sub><span class="mord mathnormal">k</span><sub>i</sub></span></span></span></span>, has mean 0 and variance <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span>.</p>
+
+<h4>3.2.2 Multi-Head Attention</h4>
+
+<p>
+  Instead of performing a single attention function with <span class="var" data-var="d_model" data-desc="Model dimensionality — size of all embedding and hidden layers (default: 512)" style="--var-color:#ffd700">d<sub>model</sub></span>-dimensional keys, values and queries, we found it beneficial to linearly project the queries, keys and values <span class="var" data-var="h" data-desc="Number of parallel attention heads (default: 8)" style="--var-color:#d2a8ff">h</span> times with different, learned linear projections to <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors per head (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span>, <span class="var" data-var="d_k" data-desc="Dimension of query and key vectors per head (default: 64)" style="--var-color:#58a6ff">d<sub>k</sub></span> and <span class="var" data-var="d_v" data-desc="Dimension of value vectors per head (default: 64)" style="--var-color:#56d4dd">d<sub>v</sub></span> dimensions, respectively. On each of these projected versions of queries, keys and values we then perform the attention function in parallel, yielding <span class="var" data-var="d_v" data-desc="Dimension of value vectors per head (default: 64)" style="--var-color:#56d4dd">d<sub>v</sub></span>-dimensional output values. These are concatenated and once again projected, resulting in the final values, as depicted in <a href="#fig-multi-head-att" class="cross-ref">Figure 2</a>.
+</p>
+
+<p>
+  Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. With a single attention head, averaging inhibits this.
+</p>
+
+<div class="math-display" data-raw="\mathrm{MultiHead}(Q, K, V) = \mathrm{Concat}(\mathrm{head}_1, \ldots, \mathrm{head}_h)W^O">
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">M</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">H</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">d</mi></mrow><mo stretchy="false">(</mo><mi>Q</mi><mo separator="true">,</mo><mi>K</mi><mo separator="true">,</mo><mi>V</mi><mo stretchy="false">)</mo><mo>=</mo><mrow><mi mathvariant="normal">C</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">c</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">t</mi></mrow><mo stretchy="false">(</mo><msub><mrow><mi mathvariant="normal">h</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">d</mi></mrow><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mrow><mi mathvariant="normal">h</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">d</mi></mrow><mi>h</mi></msub><mo stretchy="false">)</mo><msup><mi>W</mi><mi>O</mi></msup></mrow></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">MultiHead</span></span><span class="mopen">(</span><span class="mord mathnormal">Q</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1413em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">Concat</span></span><span class="mopen">(</span><span class="mord"><span class="mord"><span class="mord mathrm">head</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord"><span class="mord mathrm">head</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">O</span></span></span></span></span></span></span></span></span></span></span></span>
+</div>
+<div class="math-display" data-raw="\mathrm{head}_i = \mathrm{Attention}(QW^Q_i,\, KW^K_i,\, VW^V_i)">
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mrow><mi mathvariant="normal">h</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">d</mi></mrow><mi>i</mi></msub><mo>=</mo><mrow><mi mathvariant="normal">A</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">n</mi></mrow><mo stretchy="false">(</mo><mi>Q</mi><msubsup><mi>W</mi><mi>i</mi><mi>Q</mi></msubsup><mo separator="true">,</mo><mtext> </mtext><mi>K</mi><msubsup><mi>W</mi><mi>i</mi><mi>K</mi></msubsup><mo separator="true">,</mo><mtext> </mtext><mi>V</mi><msubsup><mi>W</mi><mi>i</mi><mi>V</mi></msubsup><mo stretchy="false">)</mo></mrow></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathrm">head</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2361em;vertical-align:-0.2769em;"></span><span class="mord"><span class="mord mathrm">Attention</span></span><span class="mopen">(</span><span class="mord mathnormal">Q</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9592em;"><span style="top:-2.4231em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.1809em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">Q</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2769em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.453em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-2.453em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.22222em;">V</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>
+</div>
+
+<p>
+  Where the projections are parameter matrices
+  <span class="var" data-var="W_i^Q" data-desc="Query projection matrix for head i (shape: d_model × d_k)" style="--var-color:#f0a050">W<sub>i</sub><sup>Q</sup></span> ∈ ℝ<sup>d<sub>model</sub>×d<sub>k</sub></sup>,
+  <span class="var" data-var="W_i^K" data-desc="Key projection matrix for head i (shape: d_model × d_k)" style="--var-color:#58a6ff">W<sub>i</sub><sup>K</sup></span> ∈ ℝ<sup>d<sub>model</sub>×d<sub>k</sub></sup>,
+  <span class="var" data-var="W_i^V" data-desc="Value projection matrix for head i (shape: d_model × d_v)" style="--var-color:#56d4dd">W<sub>i</sub><sup>V</sup></span> ∈ ℝ<sup>d<sub>model</sub>×d<sub>v</sub></sup> and
+  <span class="var" data-var="W^O" data-desc="Output projection matrix (shape: h·d_v × d_model)" style="--var-color:#7ee787">W<sup>O</sup></span> ∈ ℝ<sup>h·d<sub>v</sub>×d<sub>model</sub></sup>.
+</p>
+
+<p>
+  In this work we employ <span class="var" data-var="h" data-desc="Number of parallel attention heads (default: 8)" style="--var-color:#d2a8ff">h</span>=8 parallel attention layers, or heads. For each of these we use <span class="math-inline" data-raw="d_k=d_v=d_{\text{model}}/h=64"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal">d</span><sub>k</sub><span class="mspace" style="margin-right:0.2778em;"></span>=<span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal">d</span><sub>v</sub><span class="mspace" style="margin-right:0.2778em;"></span>=<span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal">d</span><sub>model</sub>/h<span class="mspace" style="margin-right:0.2778em;"></span>=<span class="mspace" style="margin-right:0.2778em;"></span>64</span></span></span></span>. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality.
+</p>
+
+<h4>3.2.3 Applications of Attention in our Model</h4>
+
+<p>The Transformer uses multi-head attention in three different ways:</p>
+<ul>
+  <li>In <strong>"encoder-decoder attention"</strong> layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. This allows every position in the decoder to attend over all positions in the input sequence. This mimics the typical encoder-decoder attention mechanisms in sequence-to-sequence models <sup class="ref-badge" data-ref="42" data-title="Google's NMT System">42</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup>.</li>
+  <li>The encoder contains <strong>self-attention layers</strong>. In a self-attention layer all of the keys, values and queries come from the same place — in this case, the output of the previous layer in the encoder. Each position in the encoder can attend to all positions in the previous layer of the encoder.</li>
+  <li>Similarly, <strong>self-attention layers in the decoder</strong> allow each position in the decoder to attend to all positions in the decoder up to and including that position. We need to prevent leftward information flow in the decoder to preserve the auto-regressive property. We implement this inside of scaled dot-product attention by masking out (setting to −∞) all values in the input of the softmax which correspond to illegal connections.</li>
+</ul>
+
+<h3 id="sec-ffn">3.3 Position-wise Feed-Forward Networks</h3>
+
+<p>
+  In addition to attention sub-layers, each of the layers in our encoder and decoder contains a fully connected feed-forward network, which is applied to each position separately and identically. This consists of two linear transformations with a ReLU activation in between.
+</p>
+
+<div class="math-display" data-raw="\mathrm{FFN}(x) = \max(0,\; xW_1 + b_1)\,W_2 + b_2">
+<span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mrow><mi mathvariant="normal">F</mi><mi mathvariant="normal">F</mi><mi mathvariant="normal">N</mi></mrow><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mtext>  </mtext><mi>x</mi><msub><mi>W</mi><mn>1</mn></msub><mo>+</mo><msub><mi>b</mi><mn>1</mn></msub><mo stretchy="false">)</mo><mtext> </mtext><msub><mi>W</mi><mn>2</mn></msub><mo>+</mo><msub><mi>b</mi><mn>2</mn></msub></mrow></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">FFN</span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mord mathnormal">x</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>
+</div>
+
+<p>
+  Here <span class="var" data-var="W_1" data-desc="First weight matrix of the FFN sub-layer (shape: d_model × d_ff)" style="--var-color:#f0a050">W<sub>1</sub></span>,
+  <span class="var" data-var="b_1" data-desc="First bias vector of the FFN sub-layer (d_ff-dimensional)" style="--var-color:#58a6ff">b<sub>1</sub></span>,
+  <span class="var" data-var="W_2" data-desc="Second weight matrix of the FFN sub-layer (shape: d_ff × d_model)" style="--var-color:#56d4dd">W<sub>2</sub></span>, and
+  <span class="var" data-var="b_2" data-desc="Second bias vector of the FFN sub-layer (d_model-dimensional)" style="--var-color:#7ee787">b<sub>2</sub></span>
+  are learned parameters. While the linear transformations are the same across different positions, they use different parameters from layer to layer. Another way of describing this is as two convolutions with kernel size 1. The dimensionality of input and output is <span class="var" data-var="d_model" data-desc="Model dimensionality (default: 512)" style="--var-color:#ffd700">d<sub>model</sub></span>=512, and the inner-layer has dimensionality <span class="var" data-var="d_ff" data-desc="Inner dimension of the feed-forward network (default: 2048)" style="--var-color:#d2a8ff">d<sub>ff</sub></span>=2048.
+</p>
+
+<h3>3.4 Embeddings and Softmax</h3>
+
+<p>
+  Similarly to other sequence transduction models, we use learned embeddings to convert the input tokens and output tokens to vectors of dimension <span class="var" data-var="d_model" data-desc="Model dimensionality — size of token embedding vectors (default: 512)" style="--var-color:#ffd700">d<sub>model</sub></span>. We also use the usual learned linear transformation and softmax function to convert the decoder output to predicted next-token probabilities. In our model, we share the same weight matrix between the two embedding layers and the pre-softmax linear transformation, similar to <sup class="ref-badge" data-ref="31" data-title="Using the Output Embedding to Improve Language Models">31</sup>. In the embedding layers, we multiply those weights by <span class="math-inline" data-raw="\sqrt{d_{\text{model}}}"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8572em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal">d</span><sub>model</sub></span></span></span></span></span></span></span></span></span></span>.
+</p>
+
+<h3>3.5 Positional Encoding</h3>
+
+<p>
+  Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the sequence, we must inject some information about the relative or absolute position of the tokens in the sequence. To this end, we add "positional encodings" to the input embeddings at the bottoms of the encoder and decoder stacks. The positional encodings have the same dimension <span class="var" data-var="d_model" data-desc="Model dimensionality (default: 512)" style="--var-color:#ffd700">d<sub>model</sub></span> as the embeddings, so that the two can be summed. There are many choices of positional encodings, learned and fixed <sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup>.
+</p>
+
+<p>In this work, we use sine and cosine functions of different frequencies:</p>
+
+<div class="math-display" data-raw="PE_{(pos,\,2i)} = \sin\!\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)">
+<span class="katex-display"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0385em;vertical-align:-0.3552em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">E</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.5198em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">(pos, 2i)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.854em;vertical-align:-0.704em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1076em;"><span style="top:-2.296em;"><span class="pstrut" style="height:3em;"></span><span class="mord">10000<sup>2i/d<sub>model</sub></sup></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord">pos</span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.704em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter"><span class="delimsizing size2">)</span></span></span></span></span></span></span>
+</div>
+
+<div class="math-display" data-raw="PE_{(pos,\,2i+1)} = \cos\!\left(\frac{pos}{10000^{2i/d_{\text{model}}}}\right)">
+<span class="katex-display"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0385em;vertical-align:-0.3552em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">E</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.5198em;margin-left:-0.0576em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">(pos, 2i+1)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3552em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.854em;vertical-align:-0.704em;"></span><span class="mop">cos</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1076em;"><span style="top:-2.296em;"><span class="pstrut" style="height:3em;"></span><span class="mord">10000<sup>2i/d<sub>model</sub></sup></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord">pos</span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.704em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter"><span class="delimsizing size2">)</span></span></span></span></span></span></span>
+</div>
+
+<p>
+  where <span class="var" data-var="pos" data-desc="Token position in the sequence (0-indexed)" style="--var-color:#ff7b72">pos</span> is the position and <span class="var" data-var="i" data-desc="Dimension index within the positional encoding vector" style="--var-color:#56d4dd">i</span> is the dimension. That is, each dimension of the positional encoding corresponds to a sinusoid. The wavelengths form a geometric progression from <span class="math-inline" data-raw="2\pi"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span></span></span></span></span> to 10000 · <span class="math-inline" data-raw="2\pi"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span></span></span></span></span>. We chose this function because we hypothesized it would allow the model to easily learn to attend by relative positions, since for any fixed offset <span class="var" data-var="k" data-desc="Fixed offset for relative positional encoding analysis" style="--var-color:#79c0ff">k</span>, <span class="var" data-var="PE_{pos+k}" data-desc="Positional encoding at position pos+k" style="--var-color:#ff9bce">PE<sub>pos+k</sub></span> can be represented as a linear function of <span class="var" data-var="PE_{pos}" data-desc="Positional encoding at position pos" style="--var-color:#ff9bce">PE<sub>pos</sub></span>.
+</p>
+
+<p>
+  We also experimented with using learned positional embeddings <sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup> instead, and found that the two versions produced nearly identical results (see <a href="#tab-variations" class="cross-ref">Table 2</a> row (E)). We chose the sinusoidal version because it may allow the model to extrapolate to sequence lengths longer than the ones encountered during training.
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>4. Why Self-Attention</h2>
+
+<p>
+  In this section we compare various aspects of self-attention layers to the recurrent and convolutional layers commonly used for mapping one variable-length sequence of symbol representations
+  (<span class="var" data-var="x_1" data-desc="First input element (d-dimensional vector)" style="--var-color:#f0a050">x<sub>1</sub></span>, …, <span class="var" data-var="x_n" data-desc="Last input element (d-dimensional vector)" style="--var-color:#f0a050">x<sub>n</sub></span>)
+  to another sequence of equal length
+  (<span class="var" data-var="z_1" data-desc="First output element (d-dimensional vector)" style="--var-color:#56d4dd">z<sub>1</sub></span>, …, <span class="var" data-var="z_n" data-desc="Last output element (d-dimensional vector)" style="--var-color:#56d4dd">z<sub>n</sub></span>),
+  with <span class="var" data-var="x_i" data-desc="Input element at position i (d-dimensional real vector)" style="--var-color:#f0a050">x<sub>i</sub></span>, <span class="var" data-var="z_i" data-desc="Output element at position i (d-dimensional real vector)" style="--var-color:#56d4dd">z<sub>i</sub></span> ∈ ℝ<sup><span class="var" data-var="d" data-desc="Representation dimensionality of each element" style="--var-color:#ffd700">d</span></sup>,
+  such as a hidden layer in a typical sequence transduction encoder or decoder. Motivating our use of self-attention we consider three desiderata.
+</p>
+
+<p>One is the total computational complexity per layer. Another is the amount of computation that can be parallelized, as measured by the minimum number of sequential operations required.</p>
+
+<p>
+  The third is the path length between long-range dependencies in the network. Learning long-range dependencies is a key challenge in many sequence transduction tasks. One key factor affecting the ability to learn such dependencies is the length of the paths forward and backward signals have to traverse in the network. The shorter these paths between any combination of positions in the input and output sequences, the easier it is to learn long-range dependencies <sup class="ref-badge" data-ref="12" data-title="Gradient Flow in Recurrent Nets">12</sup>. Hence we also compare the maximum path length between any two input and output positions in networks composed of the different layer types.
+</p>
+
+<p class="table-caption"><strong>Table 1.</strong> Maximum path lengths, per-layer complexity and minimum number of sequential operations for different layer types. <span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span> is the sequence length, <span class="var" data-var="d" data-desc="Representation dimension" style="--var-color:#ffd700">d</span> is the representation dimension, <span class="var" data-var="k" data-desc="Kernel size of convolutions" style="--var-color:#79c0ff">k</span> is the kernel size of convolutions and <span class="var" data-var="r" data-desc="Size of the neighborhood in restricted self-attention" style="--var-color:#56d4dd">r</span> the size of the neighborhood in restricted self-attention.</p>
+
+<table class="article-table" id="tab-op-complexities">
+  <thead>
+    <tr>
+      <th>Layer Type</th>
+      <th>Complexity per Layer</th>
+      <th>Sequential Operations</th>
+      <th>Maximum Path Length</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Self-Attention</td>
+      <td><span class="math-inline" data-raw="O(n^2 \cdot d)"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span><sup>2</sup><span class="mspace" style="margin-right:0.2222em;"></span>·<span class="mspace" style="margin-right:0.2222em;"></span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span></span></span></td>
+      <td>O(1)</td>
+      <td>O(1)</td>
+    </tr>
+    <tr>
+      <td>Recurrent</td>
+      <td><span class="math-inline" data-raw="O(n \cdot d^2)"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span>·<span class="mord mathnormal">d</span><sup>2</sup><span class="mclose">)</span></span></span></span></span></td>
+      <td>O(n)</td>
+      <td>O(n)</td>
+    </tr>
+    <tr>
+      <td>Convolutional</td>
+      <td><span class="math-inline" data-raw="O(k \cdot n \cdot d^2)"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">k</span>·<span class="mord mathnormal">n</span>·<span class="mord mathnormal">d</span><sup>2</sup><span class="mclose">)</span></span></span></span></span></td>
+      <td>O(1)</td>
+      <td>O(log<sub>k</sub>(n))</td>
+    </tr>
+    <tr>
+      <td>Self-Attention (restricted)</td>
+      <td>O(r · n · d)</td>
+      <td>O(1)</td>
+      <td>O(n/r)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  As noted in <a href="#tab-op-complexities" class="cross-ref">Table 1</a>, a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>) sequential operations. In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence length <span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span> is smaller than the representation dimensionality <span class="var" data-var="d" data-desc="Representation dimension" style="--var-color:#ffd700">d</span>, which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as word-piece <sup class="ref-badge" data-ref="42" data-title="Google's NMT System">42</sup> and byte-pair <sup class="ref-badge" data-ref="32" data-title="Neural Machine Translation of Rare Words with Subword Units">32</sup> representations.
+</p>
+
+<p>
+  To improve computational performance for tasks involving very long sequences, self-attention could be restricted to considering only a neighborhood of size <span class="var" data-var="r" data-desc="Neighborhood radius in restricted self-attention" style="--var-color:#56d4dd">r</span> in the input sequence centered around the respective output position. This would increase the maximum path length to O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>/<span class="var" data-var="r" data-desc="Neighborhood radius" style="--var-color:#56d4dd">r</span>). We plan to investigate this approach further in future work.
+</p>
+
+<p>
+  A single convolutional layer with kernel width <span class="var" data-var="k" data-desc="Convolution kernel size" style="--var-color:#79c0ff">k</span> &lt; <span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span> does not connect all pairs of input and output positions. Doing so requires a stack of O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>/<span class="var" data-var="k" data-desc="Kernel size" style="--var-color:#79c0ff">k</span>) convolutional layers in the case of contiguous kernels, or O(log<sub><span class="var" data-var="k" data-desc="Kernel size" style="--var-color:#79c0ff">k</span></sub>(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>)) in the case of dilated convolutions <sup class="ref-badge" data-ref="21" data-title="Neural Machine Translation in Linear Time">21</sup>, increasing the length of the longest paths between any two positions in the network. Convolutional layers are generally more expensive than recurrent layers, by a factor of <span class="var" data-var="k" data-desc="Kernel size" style="--var-color:#79c0ff">k</span>. Separable convolutions <sup class="ref-badge" data-ref="6" data-title="Xception: Deep Learning with Depthwise Separable Convolutions">6</sup>, however, decrease the complexity considerably, to O(<span class="var" data-var="k" data-desc="Kernel size" style="--var-color:#79c0ff">k</span>·<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>·<span class="var" data-var="d" data-desc="Representation dimension" style="--var-color:#ffd700">d</span> + <span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>·<span class="var" data-var="d" data-desc="Representation dimension" style="--var-color:#ffd700">d</span><sup>2</sup>). Even with <span class="var" data-var="k" data-desc="Kernel size" style="--var-color:#79c0ff">k</span>=<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>, however, the complexity of a separable convolution is equal to the combination of a self-attention layer and a point-wise feed-forward layer, the approach we take in our model.
+</p>
+
+<p>
+  As a side benefit, self-attention could yield more interpretable models. We inspect attention distributions from our models and present and discuss examples in the appendix. Not only do individual attention heads clearly learn to perform different tasks, many appear to exhibit behavior related to the syntactic and semantic structure of the sentences.
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>5. Training</h2>
+
+<p>This section describes the training regime for our models.</p>
+
+<h3>5.1 Training Data and Batching</h3>
+
+<p>
+  We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Sentences were encoded using byte-pair encoding <sup class="ref-badge" data-ref="3" data-title="Massive Exploration of NMT Architectures">3</sup>, which has a shared source-target vocabulary of about 37,000 tokens. For English-French, we used the significantly larger WMT 2014 English-French dataset consisting of 36M sentences and split tokens into a 32,000 word-piece vocabulary <sup class="ref-badge" data-ref="42" data-title="Google's NMT System">42</sup>. Sentence pairs were batched together by approximate sequence length. Each training batch contained a set of sentence pairs containing approximately 25,000 source tokens and 25,000 target tokens.
+</p>
+
+<h3>5.2 Hardware and Schedule</h3>
+
+<p>
+  We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds. We trained the base models for a total of 100,000 steps or 12 hours. For our big models (described on the bottom line of <a href="#tab-variations" class="cross-ref">Table 2</a>), step time was 1.0 seconds. The big models were trained for 300,000 steps (3.5 days).
+</p>
+
+<h3>5.3 Optimizer</h3>
+
+<p>
+  We used the Adam optimizer <sup class="ref-badge" data-ref="20" data-title="Adam: A Method for Stochastic Optimization">20</sup> with
+  <span class="var" data-var="β_1" data-desc="Adam optimizer first moment decay rate (default: 0.9)" style="--var-color:#ff7b72">β<sub>1</sub></span>=0.9,
+  <span class="var" data-var="β_2" data-desc="Adam optimizer second moment decay rate (default: 0.98)" style="--var-color:#79c0ff">β<sub>2</sub></span>=0.98 and
+  <span class="var" data-var="ε" data-desc="Adam optimizer numerical stability constant (default: 10⁻⁹)" style="--var-color:#ff9bce">ε</span>=10<sup>−9</sup>.
+  We varied the learning rate over the course of training, according to the formula:
+</p>
+
+<div class="math-display" data-raw="lrate = d_{\text{model}}^{-0.5} \cdot \min\!\left(step\_num^{-0.5},\; step\_num \cdot warmup\_steps^{-1.5}\right)">
+<span class="katex-display"><span class="katex"><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">ate</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1555em;vertical-align:-0.2914em;"></span><span class="mord mathnormal">d</span><sub>model</sub><sup>−0.5</sup><span class="mspace" style="margin-right:0.2222em;"></span>·<span class="mspace" style="margin-right:0.2222em;"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner"><span class="mopen delimcenter"><span class="delimsizing size1">(</span></span>step_num<sup>−0.5</sup><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span>step_num · warmup_steps<sup>−1.5</sup><span class="mclose delimcenter"><span class="delimsizing size1">)</span></span></span></span></span></span></span>
+</div>
+
+<p>
+  This corresponds to increasing the learning rate linearly for the first <span class="var" data-var="warmup_steps" data-desc="Number of warm-up training steps for learning rate schedule (default: 4000)" style="--var-color:#a5d6ff">warmup_steps</span> training steps, and decreasing it thereafter proportionally to the inverse square root of the step number. We used <span class="var" data-var="warmup_steps" data-desc="Number of warm-up training steps (default: 4000)" style="--var-color:#a5d6ff">warmup_steps</span>=4000.
+</p>
+
+<h3 id="sec-reg">5.4 Regularization</h3>
+
+<p>We employ three types of regularization during training:</p>
+
+<h4>Residual Dropout</h4>
+<p>
+  We apply dropout <sup class="ref-badge" data-ref="34" data-title="Dropout: A Simple Way to Prevent Neural Networks from Overfitting">34</sup> to the output of each sub-layer, before it is added to the sub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the positional encodings in both the encoder and decoder stacks. For the base model, we use a rate of <span class="var" data-var="P_drop" data-desc="Dropout probability (base model: 0.1, big model: 0.3)" style="--var-color:#ffd700">P<sub>drop</sub></span>=0.1.
+</p>
+
+<h4>Label Smoothing</h4>
+<p>
+  During training, we employed label smoothing of value <span class="var" data-var="ε_ls" data-desc="Label smoothing parameter (default: 0.1) — distributes probability mass to non-target labels" style="--var-color:#d2a8ff">ε<sub>ls</sub></span>=0.1 <sup class="ref-badge" data-ref="38" data-title="Rethinking the Inception Architecture">38</sup>. This hurts perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2 id="sec-results">6. Results</h2>
+
+<h3>6.1 Machine Translation</h3>
+
+<p class="table-caption"><strong>Table 2.</strong> The Transformer achieves better BLEU scores than previous state-of-the-art models on the English-to-German and English-to-French newstest2014 tests at a fraction of the training cost.</p>
+
+<table class="article-table" id="tab-wmt-results">
+  <thead>
+    <tr>
+      <th rowspan="2">Model</th>
+      <th colspan="2">BLEU</th>
+      <th></th>
+      <th colspan="2">Training Cost (FLOPs)</th>
+    </tr>
+    <tr>
+      <th>EN-DE</th>
+      <th>EN-FR</th>
+      <th></th>
+      <th>EN-DE</th>
+      <th>EN-FR</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>ByteNet <sup class="ref-badge" data-ref="21">21</sup></td>
+      <td>23.75</td><td>—</td><td></td><td>—</td><td>—</td>
+    </tr>
+    <tr>
+      <td>Deep-Att + PosUnk <sup class="ref-badge" data-ref="43">43</sup></td>
+      <td>—</td><td>39.2</td><td></td><td>—</td><td>1.0·10²⁰</td>
+    </tr>
+    <tr>
+      <td>GNMT + RL <sup class="ref-badge" data-ref="42">42</sup></td>
+      <td>24.6</td><td>39.92</td><td></td><td>2.3·10¹⁹</td><td>1.4·10²⁰</td>
+    </tr>
+    <tr>
+      <td>ConvS2S <sup class="ref-badge" data-ref="9">9</sup></td>
+      <td>25.16</td><td>40.46</td><td></td><td>9.6·10¹⁸</td><td>1.5·10²⁰</td>
+    </tr>
+    <tr>
+      <td>MoE <sup class="ref-badge" data-ref="33">33</sup></td>
+      <td>26.03</td><td>40.56</td><td></td><td>2.0·10¹⁹</td><td>1.2·10²⁰</td>
+    </tr>
+    <tr style="border-top: 2px solid var(--border)">
+      <td>Deep-Att + PosUnk Ensemble <sup class="ref-badge" data-ref="43">43</sup></td>
+      <td>—</td><td>40.4</td><td></td><td>—</td><td>8.0·10²⁰</td>
+    </tr>
+    <tr>
+      <td>GNMT + RL Ensemble <sup class="ref-badge" data-ref="42">42</sup></td>
+      <td>26.30</td><td>41.16</td><td></td><td>1.8·10²⁰</td><td>1.1·10²¹</td>
+    </tr>
+    <tr>
+      <td>ConvS2S Ensemble <sup class="ref-badge" data-ref="9">9</sup></td>
+      <td>26.36</td><td><strong>41.29</strong></td><td></td><td>7.7·10¹⁹</td><td>1.2·10²¹</td>
+    </tr>
+    <tr style="border-top: 3px solid var(--accent); background:#1c2128">
+      <td><strong>Transformer (base model)</strong></td>
+      <td>27.3</td><td>38.1</td><td></td><td colspan="2"><strong>3.3·10¹⁸</strong></td>
+    </tr>
+    <tr class="model-best" style="background:#1c2128">
+      <td><strong>Transformer (big)</strong></td>
+      <td><strong>28.4</strong></td><td><strong>41.8</strong></td><td></td><td colspan="2">2.3·10¹⁹</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  On the WMT 2014 English-to-German translation task, the big transformer model (Transformer (big) in <a href="#tab-wmt-results" class="cross-ref">Table 2</a>) outperforms the best previously reported models (including ensembles) by more than 2.0 BLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this model is listed in the bottom line of <a href="#tab-variations" class="cross-ref">Table 3</a>. Training took 3.5 days on 8 P100 GPUs. Even our base model surpasses all previously published models and ensembles, at a fraction of the training cost of any of the competitive models.
+</p>
+
+<p>
+  On the WMT 2014 English-to-French translation task, our big model achieves a BLEU score of 41.0, outperforming all of the previously published single models, at less than 1/4 the training cost of the previous state-of-the-art model. The Transformer (big) model trained for English-to-French used dropout rate <span class="var" data-var="P_drop" data-desc="Dropout rate (EN-FR big model uses 0.1)" style="--var-color:#ffd700">P<sub>drop</sub></span>=0.1, instead of 0.3.
+</p>
+
+<p>
+  For the base models, we used a single model obtained by averaging the last 5 checkpoints, which were written at 10-minute intervals. For the big models, we averaged the last 20 checkpoints. We used beam search with a beam size of 4 and length penalty <span class="var" data-var="α" data-desc="Length penalty exponent for beam search (default: 0.6)" style="--var-color:#ff7b72">α</span>=0.6 <sup class="ref-badge" data-ref="42" data-title="Google's NMT System">42</sup>. These hyperparameters were chosen after experimentation on the development set. We set the maximum output length during inference to input length + 50, but terminate early when possible <sup class="ref-badge" data-ref="42">42</sup>.
+</p>
+
+<h3>6.2 Model Variations</h3>
+
+<p class="table-caption" id="tab-variations"><strong>Table 3.</strong> Variations on the Transformer architecture. Unlisted values are identical to those of the base model. All metrics are on the English-to-German translation development set, newstest2013.</p>
+
+<table class="article-table">
+  <thead>
+    <tr>
+      <th></th>
+      <th><span class="var" data-var="N" data-desc="Number of encoder/decoder layers" style="--var-color:#ffd700">N</span></th>
+      <th><span class="var" data-var="d_model" data-desc="Model dimensionality" style="--var-color:#ffd700">d<sub>model</sub></span></th>
+      <th><span class="var" data-var="d_ff" data-desc="FFN inner dimension" style="--var-color:#d2a8ff">d<sub>ff</sub></span></th>
+      <th><span class="var" data-var="h" data-desc="Number of attention heads" style="--var-color:#d2a8ff">h</span></th>
+      <th><span class="var" data-var="d_k" data-desc="Key/query dimension per head" style="--var-color:#58a6ff">d<sub>k</sub></span></th>
+      <th><span class="var" data-var="d_v" data-desc="Value dimension per head" style="--var-color:#56d4dd">d<sub>v</sub></span></th>
+      <th><span class="var" data-var="P_drop" data-desc="Dropout rate" style="--var-color:#ffd700">P<sub>drop</sub></span></th>
+      <th><span class="var" data-var="ε_ls" data-desc="Label smoothing" style="--var-color:#d2a8ff">ε<sub>ls</sub></span></th>
+      <th>Train steps</th>
+      <th>PPL (dev)</th>
+      <th>BLEU (dev)</th>
+      <th>Params ×10⁶</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background:#1c2128">
+      <td><strong>base</strong></td>
+      <td>6</td><td>512</td><td>2048</td><td>8</td><td>64</td><td>64</td>
+      <td>0.1</td><td>0.1</td><td>100K</td><td>4.92</td><td>25.8</td><td>65</td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="4">(A)</td>
+      <td></td><td></td><td></td><td>1</td><td>512</td><td>512</td>
+      <td></td><td></td><td></td><td>5.29</td><td>24.9</td><td></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td>4</td><td>128</td><td>128</td>
+      <td></td><td></td><td></td><td>5.00</td><td>25.5</td><td></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td>16</td><td>32</td><td>32</td>
+      <td></td><td></td><td></td><td>4.91</td><td>25.8</td><td></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td>32</td><td>16</td><td>16</td>
+      <td></td><td></td><td></td><td>5.01</td><td>25.4</td><td></td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="2">(B)</td>
+      <td></td><td></td><td></td><td></td><td>16</td><td></td>
+      <td></td><td></td><td></td><td>5.16</td><td>25.1</td><td>58</td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td></td><td>32</td><td></td>
+      <td></td><td></td><td></td><td>5.01</td><td>25.4</td><td>60</td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="7">(C)</td>
+      <td>2</td><td></td><td></td><td></td><td></td><td></td>
+      <td></td><td></td><td></td><td>6.11</td><td>23.7</td><td>36</td>
+    </tr>
+    <tr>
+      <td>4</td><td></td><td></td><td></td><td></td><td></td>
+      <td></td><td></td><td></td><td>5.19</td><td>25.3</td><td>50</td>
+    </tr>
+    <tr>
+      <td>8</td><td></td><td></td><td></td><td></td><td></td>
+      <td></td><td></td><td></td><td>4.88</td><td>25.5</td><td>80</td>
+    </tr>
+    <tr>
+      <td></td><td>256</td><td></td><td></td><td>32</td><td>32</td>
+      <td></td><td></td><td></td><td>5.75</td><td>24.5</td><td>28</td>
+    </tr>
+    <tr>
+      <td></td><td>1024</td><td></td><td></td><td>128</td><td>128</td>
+      <td></td><td></td><td></td><td>4.66</td><td>26.0</td><td>168</td>
+    </tr>
+    <tr>
+      <td></td><td></td><td>1024</td><td></td><td></td><td></td>
+      <td></td><td></td><td></td><td>5.12</td><td>25.4</td><td>53</td>
+    </tr>
+    <tr>
+      <td></td><td></td><td>4096</td><td></td><td></td><td></td>
+      <td></td><td></td><td></td><td>4.75</td><td>26.2</td><td>90</td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="4">(D)</td>
+      <td></td><td></td><td></td><td></td><td></td><td></td>
+      <td>0.0</td><td></td><td></td><td>5.77</td><td>24.6</td><td></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td></td><td></td><td></td>
+      <td>0.2</td><td></td><td></td><td>4.95</td><td>25.5</td><td></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td></td><td></td><td></td>
+      <td></td><td>0.0</td><td></td><td>4.67</td><td>25.3</td><td></td>
+    </tr>
+    <tr>
+      <td></td><td></td><td></td><td></td><td></td><td></td>
+      <td></td><td>0.2</td><td></td><td>5.47</td><td>25.7</td><td></td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td>(E)</td>
+      <td colspan="8" style="text-align:left; font-style:italic;">positional embedding instead of sinusoids</td>
+      <td></td><td>4.92</td><td>25.7</td><td></td>
+    </tr>
+    <tr style="border-top:2px solid var(--accent); background:#1c2128">
+      <td><strong>big</strong></td>
+      <td>6</td><td>1024</td><td>4096</td><td>16</td><td></td><td></td>
+      <td>0.3</td><td></td><td>300K</td><td><strong>4.33</strong></td><td><strong>26.4</strong></td><td>213</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  To evaluate the importance of different components of the Transformer, we varied our base model in different ways, measuring the change in performance on English-to-German translation on the development set, newstest2013. We used beam search as described in the previous section, but no checkpoint averaging.
+</p>
+
+<p>
+  In rows (A), we vary the number of attention heads and the attention key and value dimensions, keeping the amount of computation constant, as described in <a href="#sec-attention" class="cross-ref">Section 3.2</a>. While single-head attention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.
+</p>
+
+<p>
+  In rows (B), we observe that reducing the attention key size <span class="var" data-var="d_k" data-desc="Key/query dimension per head" style="--var-color:#58a6ff">d<sub>k</sub></span> hurts model quality. This suggests that determining compatibility is not easy and that a more sophisticated compatibility function than dot product may be beneficial. We further observe in rows (C) and (D) that, as expected, bigger models are better, and dropout is very helpful in avoiding over-fitting. In row (E) we replace our sinusoidal positional encoding with learned positional embeddings <sup class="ref-badge" data-ref="9">9</sup>, and observe nearly identical results to the base model.
+</p>
+
+<h3>6.3 English Constituency Parsing</h3>
+
+<p>
+  To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing. This task presents specific challenges: the output is subject to strong structural constraints and is significantly longer than the input. Furthermore, RNN sequence-to-sequence models have not been able to attain state-of-the-art results in small-data regimes <sup class="ref-badge" data-ref="40" data-title="Grammar as a Foreign Language">40</sup>.
+</p>
+
+<p>
+  We trained a 4-layer transformer with <span class="var" data-var="d_model" data-desc="Model dimension for constituency parsing model (1024)" style="--var-color:#ffd700">d<sub>model</sub></span>=1024 on the Wall Street Journal (WSJ) portion of the Penn Treebank <sup class="ref-badge" data-ref="26" data-title="Building a Large Annotated Corpus of English: The Penn Treebank">26</sup>, about 40K training sentences. We also trained it in a semi-supervised setting, using the larger high-confidence and BerkleyParser corpora from with approximately 17M sentences <sup class="ref-badge" data-ref="40">40</sup>. We used a vocabulary of 16K tokens for the WSJ only setting and a vocabulary of 32K tokens for the semi-supervised setting.
+</p>
+
+<p>
+  We performed only a small number of experiments to select the dropout, both attention and residual (<a href="#sec-reg" class="cross-ref">Section 5.4</a>), learning rates and beam size on the Section 22 development set, all other parameters remained unchanged from the English-to-German base translation model. During inference, we increased the maximum output length to input length + 300. We used a beam size of 21 and <span class="var" data-var="α" data-desc="Length penalty exponent for beam search (parsing: 0.3)" style="--var-color:#ff7b72">α</span>=0.3 for both WSJ only and the semi-supervised setting.
+</p>
+
+<p class="table-caption"><strong>Table 4.</strong> The Transformer generalizes well to English constituency parsing (Results are on Section 23 of WSJ).</p>
+
+<table class="article-table" id="tab-parsing-results">
+  <thead>
+    <tr>
+      <th>Parser</th>
+      <th>Training</th>
+      <th>WSJ 23 F1</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Vinyals &amp; Kaiser et al. (2014) <sup class="ref-badge" data-ref="40">40</sup></td>
+      <td>WSJ only, discriminative</td><td>88.3</td>
+    </tr>
+    <tr>
+      <td>Petrov et al. (2006) <sup class="ref-badge" data-ref="31" style="--ref-color:#56d4dd">31</sup></td>
+      <td>WSJ only, discriminative</td><td>90.4</td>
+    </tr>
+    <tr>
+      <td>Zhu et al. (2013) <sup class="ref-badge" data-ref="44">44</sup></td>
+      <td>WSJ only, discriminative</td><td>90.4</td>
+    </tr>
+    <tr>
+      <td>Dyer et al. (2016) <sup class="ref-badge" data-ref="8">8</sup></td>
+      <td>WSJ only, discriminative</td><td>91.7</td>
+    </tr>
+    <tr style="border-top:2px solid var(--accent); background:#1c2128">
+      <td><strong>Transformer (4 layers)</strong></td>
+      <td>WSJ only, discriminative</td><td><strong>91.3</strong></td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td>Zhu et al. (2013) <sup class="ref-badge" data-ref="44">44</sup></td>
+      <td>semi-supervised</td><td>91.3</td>
+    </tr>
+    <tr>
+      <td>Huang &amp; Harper (2009) <sup class="ref-badge" data-ref="14">14</sup></td>
+      <td>semi-supervised</td><td>91.3</td>
+    </tr>
+    <tr>
+      <td>McClosky et al. (2006) <sup class="ref-badge" data-ref="27">27</sup></td>
+      <td>semi-supervised</td><td>92.1</td>
+    </tr>
+    <tr>
+      <td>Vinyals &amp; Kaiser et al. (2014) <sup class="ref-badge" data-ref="40">40</sup></td>
+      <td>semi-supervised</td><td>92.1</td>
+    </tr>
+    <tr style="border-top:2px solid var(--accent); background:#1c2128">
+      <td><strong>Transformer (4 layers)</strong></td>
+      <td>semi-supervised</td><td><strong>92.7</strong></td>
+    </tr>
+    <tr style="border-top:2px solid var(--border)">
+      <td>Luong et al. (2015) <sup class="ref-badge" data-ref="25">25</sup></td>
+      <td>multi-task</td><td>93.0</td>
+    </tr>
+    <tr>
+      <td>Dyer et al. (2016) <sup class="ref-badge" data-ref="8">8</sup></td>
+      <td>generative</td><td>93.3</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>
+  Our results in <a href="#tab-parsing-results" class="cross-ref">Table 4</a> show that despite the lack of task-specific tuning our model performs surprisingly well, yielding better results than all previously reported models with the exception of the Recurrent Neural Network Grammar <sup class="ref-badge" data-ref="8">8</sup>.
+</p>
+
+<p>
+  In contrast to RNN sequence-to-sequence models <sup class="ref-badge" data-ref="40">40</sup>, the Transformer outperforms the BerkeleyParser <sup class="ref-badge" data-ref="30">30</sup> even when training only on the WSJ training set of 40K sentences.
+</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>7. Conclusion</h2>
+
+<p>
+  In this work, we presented the Transformer, the first sequence transduction model based entirely on attention, replacing the recurrent layers most commonly used in encoder-decoder architectures with multi-headed self-attention.
+</p>
+
+<p>
+  For translation tasks, the Transformer can be trained significantly faster than architectures based on recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014 English-to-French translation tasks, we achieve a new state of the art. In the former task our best model outperforms even all previously reported ensembles.
+</p>
+
+<p>
+  We are excited about the future of attention-based models and plan to apply them to other tasks. We plan to extend the Transformer to problems involving input and output modalities other than text and to investigate local, restricted attention mechanisms to efficiently handle large inputs and outputs such as images, audio and video. Making generation less sequential is another research goal of ours.
+</p>
+
+<p>
+  The code we used to train and evaluate our models is available at <a href="https://github.com/tensorflow/tensor2tensor">https://github.com/tensorflow/tensor2tensor</a>.
+</p>
+
+<p><strong>Acknowledgements.</strong> We are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful comments, corrections and inspiration.</p>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>References</h2>
+
+<ol class="references">
+  <li id="ref-1"><strong>Ba, Lei, Kiros, Hinton (2016).</strong> Layer normalization. <em>arXiv:1607.06450</em>.</li>
+  <li id="ref-2"><strong>Bahdanau, Cho, Bengio (2014).</strong> Neural machine translation by jointly learning to align and translate. <em>CoRR abs/1409.0473</em>.</li>
+  <li id="ref-3"><strong>Britz, Goldie, Luong, Le (2017).</strong> Massive exploration of neural machine translation architectures. <em>CoRR abs/1703.03906</em>.</li>
+  <li id="ref-4"><strong>Cheng, Dong, Lapata (2016).</strong> Long short-term memory-networks for machine reading. <em>arXiv:1601.06733</em>.</li>
+  <li id="ref-5"><strong>Cho, van Merrienboer, Gulcehre, Bougares, Schwenk, Bengio (2014).</strong> Learning phrase representations using RNN encoder-decoder for statistical machine translation. <em>CoRR abs/1406.1078</em>.</li>
+  <li id="ref-6"><strong>Chollet (2016).</strong> Xception: Deep learning with depthwise separable convolutions. <em>arXiv:1610.02357</em>.</li>
+  <li id="ref-7"><strong>Chung, Gülçehre, Cho, Bengio (2014).</strong> Empirical evaluation of gated recurrent neural networks on sequence modeling. <em>CoRR abs/1412.3555</em>.</li>
+  <li id="ref-8"><strong>Dyer, Kuncoro, Ballesteros, Smith (2016).</strong> Recurrent neural network grammars. In <em>Proc. of NAACL</em>.</li>
+  <li id="ref-9"><strong>Gehring, Auli, Grangier, Yarats, Dauphin (2017).</strong> Convolutional sequence to sequence learning. <em>arXiv:1705.03122v2</em>.</li>
+  <li id="ref-10"><strong>Graves (2013).</strong> Generating sequences with recurrent neural networks. <em>arXiv:1308.0850</em>.</li>
+  <li id="ref-11"><strong>He, Zhang, Ren, Sun (2016).</strong> Deep residual learning for image recognition. In <em>CVPR</em>, pp. 770–778.</li>
+  <li id="ref-12"><strong>Hochreiter, Bengio, Frasconi, Schmidhuber (2001).</strong> Gradient flow in recurrent nets: the difficulty of learning long-term dependencies.</li>
+  <li id="ref-13"><strong>Hochreiter, Schmidhuber (1997).</strong> Long short-term memory. <em>Neural Computation</em>, 9(8):1735–1780.</li>
+  <li id="ref-14"><strong>Huang, Harper (2009).</strong> Self-training PCFG grammars with latent annotations across languages. In <em>EMNLP</em>, pp. 832–841.</li>
+  <li id="ref-15"><strong>Jozefowicz, Vinyals, Schuster, Shazeer, Wu (2016).</strong> Exploring the limits of language modeling. <em>arXiv:1602.02410</em>.</li>
+  <li id="ref-16"><strong>Jozefowicz et al. (2016).</strong> Exploring the limits of language modeling. <em>arXiv:1602.02410</em>.</li>
+  <li id="ref-17"><strong>Kaiser, Bengio (2016).</strong> Can active memory replace attention? In <em>NIPS</em>.</li>
+  <li id="ref-18"><strong>Kaiser, Sutskever (2016).</strong> Neural GPUs learn algorithms. In <em>ICLR</em>.</li>
+  <li id="ref-19"><strong>Kim, Denton, Hoang, Rush (2017).</strong> Structured attention networks. In <em>ICLR</em>.</li>
+  <li id="ref-20"><strong>Kingma, Ba (2015).</strong> Adam: A method for stochastic optimization. In <em>ICLR</em>.</li>
+  <li id="ref-21"><strong>Kalchbrenner, Espeholt, Simonyan, van den Oord, Graves, Kavukcuoglu (2017).</strong> Neural machine translation in linear time. <em>arXiv:1610.10099v2</em>.</li>
+  <li id="ref-22"><strong>Kuchaiev, Ginsburg (2017).</strong> Factorization tricks for LSTM networks. <em>arXiv:1703.10722</em>.</li>
+  <li id="ref-23"><strong>Lin, Feng, Santos, Yu, Xiang, Zhou, Bengio (2017).</strong> A structured self-attentive sentence embedding. <em>arXiv:1703.03130</em>.</li>
+  <li id="ref-24"><strong>Lin et al. (2017).</strong> A structured self-attentive sentence embedding. <em>arXiv:1703.03130</em>.</li>
+  <li id="ref-25"><strong>Luong, Le, Sutskever, Vinyals, Kaiser (2015).</strong> Multi-task sequence to sequence learning. <em>arXiv:1511.06114</em>.</li>
+  <li id="ref-26"><strong>Marcus, Marcinkiewicz, Santorini (1993).</strong> Building a large annotated corpus of English: The Penn Treebank. <em>Computational Linguistics</em>, 19(2):313–330.</li>
+  <li id="ref-27"><strong>McClosky, Charniak, Johnson (2006).</strong> Effective self-training for parsing. In <em>HLT-NAACL</em>, pp. 152–159.</li>
+  <li id="ref-28"><strong>Parikh, Täckström, Das, Uszkoreit (2016).</strong> A decomposable attention model. In <em>EMNLP</em>.</li>
+  <li id="ref-29"><strong>Parikh et al. (2016).</strong> A decomposable attention model. In <em>EMNLP</em>.</li>
+  <li id="ref-30"><strong>Paulus, Xiong, Socher (2017).</strong> A deep reinforced model for abstractive summarization. <em>arXiv:1705.04304</em>.</li>
+  <li id="ref-31"><strong>Petrov, Barrett, Thibaux, Klein (2006).</strong> Learning accurate, compact, and interpretable tree annotation. In <em>ACL</em>, pp. 433–440.</li>
+  <li id="ref-32"><strong>Press, Wolf (2016).</strong> Using the output embedding to improve language models. <em>arXiv:1608.05859</em>.</li>
+  <li id="ref-33"><strong>Sennrich, Haddow, Birch (2015).</strong> Neural machine translation of rare words with subword units. <em>arXiv:1508.07909</em>.</li>
+  <li id="ref-34"><strong>Shazeer, Mirhoseini, Maziarz, Davis, Le, Hinton, Dean (2017).</strong> Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. <em>arXiv:1701.06538</em>.</li>
+  <li id="ref-35"><strong>Srivastava, Hinton, Krizhevsky, Sutskever, Salakhutdinov (2014).</strong> Dropout: A simple way to prevent neural networks from overfitting. <em>JMLR</em>, 15(1):1929–1958.</li>
+  <li id="ref-36"><strong>Sukhbaatar, Szlam, Weston, Fergus (2015).</strong> End-to-end memory networks. In <em>NIPS 28</em>, pp. 2440–2448.</li>
+  <li id="ref-37"><strong>Sutskever, Vinyals, Le (2014).</strong> Sequence to sequence learning with neural networks. In <em>NIPS</em>, pp. 3104–3112.</li>
+  <li id="ref-38"><strong>Szegedy, Vanhoucke, Ioffe, Shlens, Wojna (2015).</strong> Rethinking the inception architecture for computer vision. <em>CoRR abs/1512.00567</em>.</li>
+  <li id="ref-39"><strong>Vinyals &amp; Kaiser, Koo, Petrov, Sutskever, Hinton (2015).</strong> Grammar as a foreign language. In <em>NIPS</em>.</li>
+  <li id="ref-40"><strong>Vinyals &amp; Kaiser et al. (2015).</strong> Grammar as a foreign language. In <em>NIPS</em>.</li>
+  <li id="ref-41"><strong>Wu, Schuster, Chen, Le, Norouzi, Macherey, et al. (2016).</strong> Google's neural machine translation system: Bridging the gap between human and machine translation. <em>arXiv:1609.08144</em>.</li>
+  <li id="ref-42"><strong>Wu et al. (2016).</strong> Google's neural machine translation system. <em>arXiv:1609.08144</em>.</li>
+  <li id="ref-43"><strong>Zhou, Cao, Wang, Li, Xu (2016).</strong> Deep recurrent models with fast-forward connections for neural machine translation. <em>CoRR abs/1606.04199</em>.</li>
+  <li id="ref-44"><strong>Zhu, Zhang, Chen, Zhang, Zhu (2013).</strong> Fast and accurate shift-reduce constituent parsing. In <em>ACL</em>, pp. 434–443.</li>
+</ol>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<h2>Attention Visualizations</h2>
+
+<figure id="fig-viz-long-range">
+  <img src="./figures/making_more_difficult5_new.png" alt="Attention visualization: long-distance dependency for making...more difficult" loading="lazy" style="max-width:100%">
+  <figcaption><strong>Figure 3.</strong> An example of the attention mechanism following long-distance dependencies in the encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of the verb 'making', completing the phrase 'making...more difficult'. Attentions here shown only for the word 'making'. Different colors represent different heads. Best viewed in color.</figcaption>
+</figure>
+
+<figure id="fig-viz-anaphora">
+  <img src="./figures/anaphora_resolution_new.png" alt="Attention visualization: anaphora resolution (full head 5)" loading="lazy" style="max-width:100%">
+  <img src="./figures/anaphora_resolution2_new.png" alt="Attention visualization: anaphora resolution for 'its'" loading="lazy" style="max-width:100%; margin-top:1rem">
+  <figcaption><strong>Figure 4.</strong> Two attention heads, also in layer 5 of 6, apparently involved in anaphora resolution. <strong>Top:</strong> Full attentions for head 5. <strong>Bottom:</strong> Isolated attentions from just the word 'its' for attention heads 5 and 6. Note that the attentions are very sharp for this word.</figcaption>
+</figure>
+
+<figure id="fig-viz-structure">
+  <img src="./figures/attending_to_head_new.png" alt="Attention visualization: syntactic structure head 1" loading="lazy" style="max-width:100%">
+  <img src="./figures/attending_to_head2_new.png" alt="Attention visualization: syntactic structure head 2" loading="lazy" style="max-width:100%; margin-top:1rem">
+  <figcaption><strong>Figure 5.</strong> Many of the attention heads exhibit behaviour that seems related to the structure of the sentence. We give two such examples above, from two different heads from the encoder self-attention at layer 5 of 6. The heads clearly learned to perform different tasks.</figcaption>
+</figure>
+
+</body>
+</html>
