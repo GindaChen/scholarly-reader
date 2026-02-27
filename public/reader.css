@@ -1416,9 +1416,11 @@ body.eraser-mode .user-hl {
 }
 
 .eq-preview {
-    font-size: 12px;
+    font-size: 13px;
     color: var(--text);
-    font-family: 'KaTeX_Math', 'Times New Roman', serif;
+    font-family: 'KaTeX_Main', 'Cambria Math', 'STIX Two Text', 'JetBrains Mono', monospace;
+    font-style: normal;
+    font-weight: 500;
     line-height: 1.6;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1439,7 +1441,8 @@ body.eraser-mode .user-hl {
     border-radius: 4px;
     background: var(--surface-2);
     color: var(--text-secondary);
-    font-family: 'KaTeX_Math', monospace;
+    font-family: 'JetBrains Mono', 'KaTeX_Main', monospace;
+    font-style: normal;
 }
 
 /* Variable cross-highlighting when equation is selected */
@@ -1891,6 +1894,57 @@ body.eraser-mode .user-hl {
     color: var(--text-faint);
 }
 
+.note-meta-left {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.note-meta-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.note-source-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1px 7px;
+    border-radius: 999px;
+    font-size: 10px;
+    letter-spacing: 0.3px;
+    border: 1px solid transparent;
+}
+
+.note-source-badge.human {
+    color: #7ee787;
+    background: rgba(126, 231, 135, 0.12);
+    border-color: rgba(126, 231, 135, 0.35);
+}
+
+.note-source-badge.ai {
+    color: #f0a050;
+    background: rgba(240, 160, 80, 0.12);
+    border-color: rgba(240, 160, 80, 0.35);
+}
+
+.note-jump {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    transition: all 0.15s;
+}
+
+.note-jump:hover {
+    color: var(--accent-hover);
+    background: var(--accent-dim);
+}
+
 .note-delete {
     background: none;
     border: none;
@@ -1922,6 +1976,26 @@ body.eraser-mode .user-hl {
     border-bottom: none;
     max-height: 60px;
     overflow: hidden;
+}
+
+.note-source-toggle {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin: 8px 0 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.note-source-toggle label {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    cursor: pointer;
+}
+
+.note-source-toggle input[type="radio"] {
+    accent-color: var(--accent);
 }
 
 .note-editor textarea {
@@ -2635,6 +2709,12 @@ body.resizing {
     padding: 1px 0;
 }
 
+.user-hl[data-hl="ai-note"] {
+    background: rgba(240, 160, 80, 0.18);
+    border-bottom: 2px solid rgba(240, 160, 80, 0.85);
+    padding: 1px 0;
+}
+
 .user-hl[data-hl="bold"] {
     font-weight: 700;
 }
@@ -2698,6 +2778,20 @@ body.resizing {
 
 .collapsed-toggle:hover {
     opacity: 1;
+}
+
+.evidence-focus {
+    animation: evidencePulse 1.2s ease-out;
+}
+
+@keyframes evidencePulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(var(--accent-rgb, 240, 160, 80), 0.6);
+    }
+
+    100% {
+        box-shadow: 0 0 0 8px rgba(var(--accent-rgb, 240, 160, 80), 0);
+    }
 }
 
 /* ═══════ TOOLBAR EXTRAS ═══════ */
