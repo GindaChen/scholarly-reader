@@ -821,6 +821,7 @@
      * Scan for <sup class="ref-badge" data-ref="N" data-title="..." data-url="..." data-quote="...">
      */
     function extractReferences() {
+        // First pass: collect from ref-badges
         article.querySelectorAll('.ref-badge[data-ref]').forEach(el => {
             const num = el.dataset.ref;
             if (!state.references[num]) {
@@ -829,7 +830,24 @@
                     title: el.dataset.title || `Reference ${num}`,
                     url: el.dataset.url || '',
                     quote: el.dataset.quote || '',
+                    arxivId: '',
                 };
+            }
+        });
+        // Second pass: scan bibliography <li id="ref-N"> entries for arXiv IDs and URLs
+        article.querySelectorAll('li[id^="ref-"]').forEach(li => {
+            const num = li.id.replace('ref-', '');
+            const text = li.textContent || '';
+            const html = li.innerHTML || '';
+            // Extract arXiv ID from text like "arXiv:1607.06450" or "arxiv.org/abs/1706.03762"
+            const arxivMatch = text.match(/arxiv[:\/]+(\d{4}\.\d{4,5}(?:v\d+)?)/i);
+            // Extract URL from any <a> tag in the entry
+            const linkMatch = html.match(/href="([^"]+)"/i);
+            if (state.references[num]) {
+                if (arxivMatch && !state.references[num].arxivId)
+                    state.references[num].arxivId = arxivMatch[1];
+                if (linkMatch && !state.references[num].url)
+                    state.references[num].url = linkMatch[1];
             }
         });
     }
@@ -1073,7 +1091,10 @@
             li.className = 'ref-list-item';
             li.dataset.ref = num;
             li.innerHTML = `<span class="ref-num">[${num}]</span> <span class="ref-title">${esc(ref.title)}</span>`;
-            li.addEventListener('click', () => showRefDetail(num));
+            li.addEventListener('click', () => {
+                showRefDetail(num);
+                openRefInSplitView(num);
+            });
             refList.appendChild(li);
         });
     }
@@ -2333,76 +2354,222 @@
     //  Split Views
     // ═══════════════════════════════════════════════
 
+    // Shared split-view counter (used by both manual adds and ref-triggered splits)
+    let splitCount = 0;
+    let splitIsHorizontal = true;
+
+    /**
+     * Create a new split view showing a given HTML content.
+     * @param {string} label     - Header label
+     * @param {string} html      - Inner HTML for the split-content area
+     * @param {string} [reuseId] - If a split with this id exists, reuse it instead of creating
+     * @returns {HTMLElement} the split view element
+     */
+    function createSplitView(label, html, reuseId) {
+        const container = $('#split-container');
+        if (!container) return null;
+
+        // Reuse existing split if requested
+        if (reuseId) {
+            const existing = $('#' + reuseId);
+            if (existing) {
+                if (label) existing.querySelector('.split-title').textContent = label;
+                if (html) existing.querySelector('.split-content').innerHTML = html;
+                existing.style.outline = '2px solid var(--accent, #7c6af7)';
+                setTimeout(() => { existing.style.outline = ''; }, 800);
+                return existing;
+            }
+        }
+
+        splitCount++;
+        const newId = reuseId || `split-${splitCount}`;
+
+        const splitView = document.createElement('div');
+        splitView.className = 'split-view';
+        splitView.id = newId;
+
+        splitView.innerHTML = `
+            <div class="split-view-header">
+                <span class="split-title">${label || `Split View ${splitCount}`}</span>
+                <div class="split-view-actions">
+                    <button class="btn-close-split" title="Close Split">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+            <div class="split-content" id="article-${splitCount}">
+                ${html || ''}
+            </div>
+        `;
+
+        container.appendChild(splitView);
+
+        splitView.querySelector('.btn-close-split').addEventListener('click', () => {
+            splitView.remove();
+        });
+
+        const newArticle = splitView.querySelector('.split-content');
+        newArticle.addEventListener('contextmenu', (e) => {
+            const v = e.target.closest('.var');
+            if (!v) return;
+            e.preventDefault();
+            showVarEditorPopup(v.dataset.var, e.clientX, e.clientY);
+        });
+
+        return splitView;
+    }
+
+    /**
+     * Open a referenced paper in a split view (reusing the dedicated 'ref-split' slot).
+     * Tries to match the reference title against locally available docs.
+     * Falls back to a "not available" message with the ref metadata.
+     */
+    async function openRefInSplitView(num) {
+        const ref = state.references[num];
+        if (!ref) return;
+
+        const label = `[${num}] ${ref.title}`;
+
+        // Show a loading placeholder immediately
+        const splitView = createSplitView(label,
+            `<p class="panel-empty" style="padding:2rem;">⏳ Loading <em>${esc(ref.title)}</em>…</p>`,
+            'ref-split');
+
+        // Fetch doc list and try to match by title (case-insensitive substring)
+        let matched = null;
+        try {
+            const docs = await fetchJSON('/api/docs');
+            const refTitleLower = ref.title.toLowerCase();
+            matched = docs.find(d => {
+                const t = (d.title || d.id || '').toLowerCase();
+                return t.includes(refTitleLower) || refTitleLower.includes(t);
+            });
+        } catch (e) { /* ignore */ }
+
+        const contentEl = splitView.querySelector('.split-content');
+
+        if (matched) {
+            try {
+                const docData = await fetchJSON(`/api/doc/${encodeURIComponent(matched.id)}`);
+                contentEl.innerHTML = docData.content;
+            } catch (e) {
+                contentEl.innerHTML = `<p class="panel-empty" style="padding:2rem;">⚠️ Failed to load <em>${esc(matched.title || matched.id)}</em>.</p>`;
+            }
+        } else {
+            // Try to extract an arXiv ID from the reference URL or title
+            const arxivId = ref.arxivId || extractArxivId(ref.url || '') || extractArxivId(ref.title || '');
+            if (arxivId) {
+                await importAndLoadInSplit(arxivId, ref.title, label, contentEl);
+            } else {
+                // No arXiv ID found — show ref metadata with manual import option
+                const urlHtml = ref.url
+                    ? `<a class="ref-detail-link" href="${esc(ref.url)}" target="_blank" rel="noopener">${esc(ref.url)}</a>`
+                    : '';
+                const quoteHtml = ref.quote
+                    ? `<div class="ref-detail-quote">${esc(ref.quote)}</div>`
+                    : '';
+                contentEl.innerHTML = `
+                    <div class="ref-detail" style="padding:1.5rem;">
+                        <div class="ref-detail-title">[${num}] ${esc(ref.title)}</div>
+                        ${urlHtml}
+                        ${quoteHtml}
+                        <p class="panel-empty" style="margin-top:1.5rem;">
+                            📄 This paper is not available locally and no arXiv ID was found.<br>
+                            ${ref.url ? 'Open the link above to read it.' : 'No URL recorded for this reference.'}
+                        </p>
+                        <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
+                            <input id="manual-arxiv-input" class="var-editor-input" placeholder="Enter arXiv ID (e.g. 1706.03762)" style="flex:1;padding:0.4rem 0.6rem;font-size:13px;" />
+                            <button id="manual-arxiv-btn" class="ctx-item" style="padding:0.4rem 0.8rem;cursor:pointer;">Import</button>
+                        </div>
+                    </div>`;
+                contentEl.querySelector('#manual-arxiv-btn').addEventListener('click', async () => {
+                    const id = contentEl.querySelector('#manual-arxiv-input').value.trim();
+                    if (!id) return;
+                    await importAndLoadInSplit(id, ref.title, label, contentEl);
+                });
+            }
+        }
+    }
+
+    /** Extract arXiv ID from a URL like https://arxiv.org/abs/1706.03762 or a bare "1706.03762" */
+    function extractArxivId(str) {
+        if (!str) return null;
+        const m = str.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arxiv:)?(\d{4}\.\d{4,5}(?:v\d+)?)/i);
+        return m ? m[1] : null;
+    }
+
+    /** Trigger arXiv import pipeline, poll for completion, then load into the split content area. */
+    async function importAndLoadInSplit(arxivId, title, label, contentEl) {
+        contentEl.innerHTML = `
+            <div style="padding:2rem;text-align:center;">
+                <p>⬇️ Downloading <strong>${esc(title || arxivId)}</strong>…</p>
+                <p id="import-progress" style="color:var(--text-muted,#888);font-size:13px;margin-top:0.5rem;">Starting…</p>
+            </div>`;
+
+        let jobId;
+        try {
+            const res = await fetchJSON('/api/import-arxiv', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ arxivId, legacy: true })
+            });
+            jobId = res.jobId;
+        } catch (e) {
+            contentEl.innerHTML = `<p class="panel-empty" style="padding:2rem;">⚠️ Import failed: ${esc(e.message)}</p>`;
+            return;
+        }
+
+        // Poll until done
+        const progressEl = () => contentEl.querySelector('#import-progress');
+        while (true) {
+            await new Promise(r => setTimeout(r, 1500));
+            let job;
+            try { job = await fetchJSON(`/api/import-status/${jobId}`); } catch { break; }
+            if (progressEl()) progressEl().textContent = job.progress || '…';
+            if (job.status === 'done') {
+                // Reload doc list and find the new doc
+                try {
+                    const docs = await fetchJSON('/api/docs');
+                    const idLower = arxivId.replace('.', '-').toLowerCase();
+                    const newDoc = docs.find(d => (d.id || '').toLowerCase().includes(idLower) || (d.id || '').includes(arxivId));
+                    if (newDoc) {
+                        const docData = await fetchJSON(`/api/doc/${encodeURIComponent(newDoc.id)}`);
+                        contentEl.innerHTML = docData.content;
+                    } else {
+                        contentEl.innerHTML = `<p class="panel-empty" style="padding:2rem;">✅ Import complete — refresh the doc list to open it.</p>`;
+                    }
+                } catch (e) {
+                    contentEl.innerHTML = `<p class="panel-empty" style="padding:2rem;">✅ Import done but couldn't load: ${esc(e.message)}</p>`;
+                }
+                break;
+            } else if (job.status === 'error') {
+                contentEl.innerHTML = `<p class="panel-empty" style="padding:2rem;">⚠️ Import error: ${esc(job.error || 'unknown')}</p>`;
+                break;
+            }
+        }
+    }
+
     function setupSplitViews() {
         const btnAdd = $('#btn-add-split');
         const btnOrientation = $('#btn-split-orientation');
         const container = $('#split-container');
         if (!btnAdd || !container) return;
 
-        let splitCount = 0;
-        let isHorizontal = true; // true = left/right (row), false = up/down (column)
-
         // Orientation toggle
         if (btnOrientation) {
             btnOrientation.addEventListener('click', () => {
-                isHorizontal = !isHorizontal;
-                container.classList.toggle('split-vertical', !isHorizontal);
-                // Rotate the icon
+                splitIsHorizontal = !splitIsHorizontal;
+                container.classList.toggle('split-vertical', !splitIsHorizontal);
                 const svg = btnOrientation.querySelector('svg');
-                if (svg) svg.style.transform = isHorizontal ? '' : 'rotate(90deg)';
+                if (svg) svg.style.transform = splitIsHorizontal ? '' : 'rotate(90deg)';
             });
         }
 
         btnAdd.addEventListener('click', () => {
-            splitCount++;
-            const newId = `split-${splitCount}`;
-
-            // Clone the original article HTML (the DOM structure)
-            const mainArticle = $('#article');
-            const newContentHtml = mainArticle.innerHTML;
-
-            const splitView = document.createElement('div');
-            splitView.className = 'split-view';
-            splitView.id = newId;
-
-            splitView.innerHTML = `
-                <div class="split-view-header">
-                    <span class="split-title">Split View ${splitCount}</span>
-                    <div class="split-view-actions">
-                        <button class="btn-close-split" title="Close Split">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="18" y1="6" x2="6" y2="18"></line>
-                                <line x1="6" y1="6" x2="18" y2="18"></line>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-                <div class="split-content" id="article-${splitCount}">
-                    ${newContentHtml}
-                </div>
-            `;
-
-            container.appendChild(splitView);
-
-            // Setup close button
-            splitView.querySelector('.btn-close-split').addEventListener('click', () => {
-                splitView.remove();
-            });
-
-            // Make sure the new math/toggles and dynamic listeners are respected inside the new split
-            // The article variable in our JS is currently closed-over as the main #article element.
-            // For hovering/selection in splits to perfectly match the main system, we'd need
-            // to upgrade the global `article` to query all `.split-content` areas. 
-            // For now, this provides a visual clone that scrolls independently.
-
-            // Optional: attach right-click listeners to the new split so tooltips work inside it
-            const newArticle = splitView.querySelector('.split-content');
-            newArticle.addEventListener('contextmenu', (e) => {
-                const v = e.target.closest('.var');
-                if (!v) return;
-                e.preventDefault();
-                showVarEditorPopup(v.dataset.var, e.clientX, e.clientY);
-            });
+            createSplitView(`Split View ${splitCount + 1}`, $('#article').innerHTML);
         });
     }
 

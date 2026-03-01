@@ -462,13 +462,25 @@ app.post('/api/import-arxiv', async (req, res) => {
             if (job) { job.status = 'done'; job.result = result; }
         } else {
             // LLM-native agent pipeline
-            const { importPaperWithAgent } = await import('./agents/import-agent/index.mjs');
-            const result = await importPaperWithAgent(arxivId, (msg) => {
+            try {
+                const { importPaperWithAgent } = await import('./agents/import-agent/index.mjs');
+                const result = await importPaperWithAgent(arxivId, (msg) => {
+                    const job = importJobs.get(jobId);
+                    if (job) job.progress = msg;
+                });
                 const job = importJobs.get(jobId);
-                if (job) job.progress = msg;
-            });
-            const job = importJobs.get(jobId);
-            if (job) { job.status = 'done'; job.result = result; }
+                if (job) { job.status = 'done'; job.result = result; }
+            } catch (agentErr) {
+                // Fall back to legacy pipeline if agent fails (e.g. no API key)
+                console.warn('[import] Agent failed, falling back to legacy pipeline:', agentErr.message);
+                const { importArxiv } = require('./arxiv-pipeline');
+                const result = await importArxiv(arxivId, (msg) => {
+                    const job = importJobs.get(jobId);
+                    if (job) job.progress = msg;
+                });
+                const job = importJobs.get(jobId);
+                if (job) { job.status = 'done'; job.result = result; }
+            }
         }
     } catch (err) {
         const job = importJobs.get(jobId);
@@ -543,7 +555,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 if (require.main === module) {
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
         console.log(`📖 Scholarly Reader on http://localhost:${PORT}`);
         const yaml = require('js-yaml');
         const folders = fs.readdirSync(DOCS_DIR, { withFileTypes: true })
