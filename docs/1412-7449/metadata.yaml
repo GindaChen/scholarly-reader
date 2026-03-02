@@ -1,0 +1,34 @@
+title: Grammar as a Foreign Language
+short_title: Grammar as a Foreign Language
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1412.7449
+pdf: https://arxiv.org/pdf/1412.7449
+arxiv_id: '1412.7449'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1412.7449
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Syntactic constituency parsing is a fundamental problem in natural
+  language processing and has been the subject of intensive research
+  and engineering for decades.  As a result, the most accurate parsers
+  are domain specific, complex, and inefficient.  In this paper we show
+  that the domain agnostic attention-enhanced sequence-to-sequence model
+  achieves state-of-the-art results on the most widely used syntactic
+  constituency parsing dataset, when trained on a large synthetic
+  corpus that was annotate
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 0
+reference_count: 0
+sections: 6
+figures: 4

@@ -24,7 +24,7 @@ const TEMP_DIR = path.join(__dirname, 'docs', '.arxiv-tmp');
 const PROMPT_PATH = path.join(__dirname, 'prompts', 'annotate-section.md');
 
 // Import tools
-const { renderAllMath } = require('./tools/render-math');
+const { renderAllMath, extractKatexMacros, setCustomMacros } = require('./tools/render-math');
 const { extractFigures, replaceFiguresInText } = require('./tools/extract-figures');
 const { convertTables } = require('./tools/convert-tables');
 const { collectLabels, resolveRefs } = require('./tools/resolve-refs');
@@ -179,10 +179,19 @@ function processSection(content) {
     result = result.replace(/\\subsection\*?\{([^}]+)\}/g, '### $1');
     result = result.replace(/\\subsubsection\*?\{([^}]+)\}/g, '#### $1');
 
-    // Convert formatting
-    result = result.replace(/\\textbf\{([^}]+)\}/g, '**$1**');
-    result = result.replace(/\\textit\{([^}]+)\}/g, '*$1*');
-    result = result.replace(/\\emph\{([^}]+)\}/g, '*$1*');
+    // Convert formatting (\textbf → bold, \textit/\emph → italic)
+    result = result.replace(/\\textbf\{([^}]+)\}/g, '<strong>$1</strong>');
+    result = result.replace(/\\textit\{([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\\emph\{([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\\textrm\{([^}]+)\}/g, '$1');
+    result = result.replace(/\\texttt\{([^}]+)\}/g, '<code>$1</code>');
+    // Brace-group forms: {\bf ...}, {\it ...}, {\em ...}, {\tt ...}
+    result = result.replace(/\{\\bf\s+([^}]+)\}/g, '<strong>$1</strong>');
+    result = result.replace(/\{\\it\s+([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\{\\em\s+([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\{\\tt\s+([^}]+)\}/g, '<code>$1</code>');
+    result = result.replace(/\{\\rm\s+([^}]+)\}/g, '$1');
+    result = result.replace(/\{\\sc\s+([^}]+)\}/g, '<span style="font-variant:small-caps">$1</span>');
     result = result.replace(/\\url\{([^}]+)\}/g, '[$1]($1)');
     result = result.replace(/\\paragraph\{([^}]+)\}/g, '**$1.**');
     result = result.replace(/~(?!\\)/g, ' ');
@@ -414,6 +423,10 @@ async function importArxiv(arxivId, onProgress) {
     const labels = collectLabels(fullTex);
     console.log(`[3/5] Found ${labels.size} labels`);
 
+    // Extract and register custom macros from preamble for KaTeX
+    const customMacros = extractKatexMacros(resolvedTex);
+    setCustomMacros(customMacros);
+
     // Process each section with tools
     progress('Processing sections with tools...');
     const processedSections = [];
@@ -434,6 +447,11 @@ async function importArxiv(arxivId, onProgress) {
 
         // Render math with KaTeX
         content = renderAllMath(content);
+
+        // Convert markdown-style headers inside sections to HTML
+        content = content.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+        content = content.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        content = content.replace(/^## (.+)$/gm, '<h3>$1</h3>');
 
         // Wrap paragraphs
         content = content

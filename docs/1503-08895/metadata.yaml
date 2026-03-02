@@ -1,0 +1,36 @@
+title: End-To-End Memory Networks
+short_title: End-To-End Memory Networks
+type: journal-article
+authors:
+  - given: Sainbayar Sukhbaatar Dept. of Computer Science Courant
+    family: Institute
+date: '2026-03-02'
+url: https://arxiv.org/abs/1503.08895
+pdf: https://arxiv.org/pdf/1503.08895
+arxiv_id: '1503.08895'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1503.08895
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  We introduce a neural network with a recurrent attention model over a possibly
+  large external memory.
+  The architecture is a form of Memory Network
+  \cite{Weston14} but unlike the model in that work, it is trained end-to-end,
+  and hence requires significantly less supervision during training, making it more generally
+  applicable in realistic settings.
+  It can also be seen as an extension of RNNsearch \cite{BahdanauCB14} to the case where
+  multiple computational steps (hops) are performed per output sy
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 4
+reference_count: 25
+sections: 9
+figures: 4

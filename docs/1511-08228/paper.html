@@ -1,0 +1,1001 @@
+<h1>Neural GPUs Learn Algorithms</h1>
+
+<p class="authors"></p>
+
+<h2>Abstract</h2>
+<p>Learning an algorithm from examples is a fundamental problem that has been widely studied.
+It has been addressed using neural networks too, in particular by Neural Turing Machines (NTMs).
+These are fully differentiable computers that use backpropagation to learn their own programming.
+Despite their appeal NTMs have a weakness that is caused by their sequential nature:
+they are not parallel and are are hard to train due to their large depth when unfolded.
+
+We present a neural network architecture to address this problem: 
+the <em>Neural GPU</em>. It is based on a type of convolutional gated
+recurrent unit and, like the NTM, is computationally universal. Unlike the NTM,
+the Neural GPU is highly parallel which makes it easier to train and efficient to run.
+
+An essential property of algorithms is their ability to handle inputs of arbitrary size.
+We show that the Neural GPU can be trained on short instances of an algorithmic task
+and successfully generalize to long instances.
+We verified it on a number of tasks including long addition and long multiplication
+of numbers represented in binary.  We train the Neural GPU on numbers with up-to
+$20$ bits and observe no errors whatsoever while testing it, even on much longer numbers.
+
+To achieve these results we introduce a technique for training deep recurrent networks:
+parameter sharing relaxation.  We also found a small amount of dropout 
+and gradient noise to have a large positive effect on learning and generalization.</p>
+
+<hr>
+
+<h2>1. Introduction</h2>
+
+<p>Deep neural networks have recently proven successful at various tasks,
+such as computer vision [img12], speech recognition [dahl12], and in other domains.
+Recurrent neural networks based on long short-term memory (LSTM) cells [hochreiter1997] have been
+successfully applied to a number of natural language processing tasks.
+Sequence-to-sequence recurrent neural networks with such cells can learn very complex tasks in an end-to-end manner,
+such as translation [sutskever14][bahdanau2014neural][cho2014learning], parsing [KVparse15],
+speech recognition [las16] or image caption generation [vinyals2014show].
+Since so many tasks can be solved with essentially one model, a natural question arises:
+is this model the best we can hope for in supervised learning?</p>
+
+<p>Despite its recent success, the sequence-to-sequence
+model has limitations. In its basic form, the entire input is encoded
+into a single fixed-size vector, so the model cannot generalize to inputs much longer
+than this fixed capacity. One way to resolve this problem is by using
+an attention mechanism [bahdanau2014neural]. This allows
+the network to inspect arbitrary parts of the input in every decoding step, so
+the basic limitation is removed. But other problems remain, and [algo15]
+show a number of basic algorithmic tasks on which sequence-to-sequence
+LSTM networks fail to generalize.
+They propose a stack-augmented recurrent network, and it works
+on some problems, but is limited in other ways.</p>
+
+<p>In the best case one would desire a neural network model able to learn arbitrarily complex algorithms given enough resources. Neural Turing Machines [ntm14] have this theoretical property.
+However, they are not computationally efficient because they use soft attention and
+because they tend to be of considerable depth.   Their depth makes the training objective difficult to optimize and impossible to parallelize
+because they are learning a sequential program.
+Their use of soft attention requires accessing the entire memory in order to
+simulate <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span> step of computation, which introduces substantial overhead.
+These two factors make learning complex algorithms using Neural Turing Machines difficult.
+These issues are not limited to Neural Turing Machines, they apply to other architectures too,
+such as stack-RNNs [algo15] or (De)Queue-RNNs [dequeue15].
+One can try to alleviate these problems using hard attention and reinforcement
+learning, but such non-differentiable models do not learn well
+at present [reinforceNTM15].</p>
+
+<p>In this work we present a neural network model, the *Neural GPU*, that addresses the above issues.
+It is a Turing-complete model capable of learning arbitrary algorithms
+in principle, like a Neural Turing Machine. But, in contrast to
+Neural Turing Machines, it is designed to be as parallel and as shallow as possible.
+It is more similar to a GPU than to a Turing machine since it uses a smaller number of parallel computational steps.
+We show that the Neural GPU works in multiple experiments:
+- A Neural GPU can learn *long binary multiplication* from examples.
+  It is the first neural network able to learn an algorithm whose run-time is superlinear
+  in the size of its input. Trained on up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn></mrow><annotation encoding="application/x-tex">20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span>-bit numbers, we see
+  *no single error* on any inputs we tested, and we tested on numbers up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span> bits long.
+- The same architecture can also learn *long binary addition* and a number of other algorithmic tasks,
+  such as counting, copying sequences, reversing them, or duplicating them.</p>
+
+### Related Work
+
+<p>The learning of algorithms with neural networks has seen a lot of interest
+after the success of sequence-to-sequence neural networks on language
+processing tasks [sutskever14][bahdanau2014neural][cho2014learning]. An attempt has
+even been made to learn to evaluate simple python programs with a pure sequence-to-sequence
+model [ZS14], but more success was seen with more complex models.
+Neural Turing Machines [ntm14] were shown to learn a number of basic
+sequence transformations and memory access patterns, and their reinforcement
+learning variant [reinforceNTM15] has reasonable performance on a number
+of tasks as well. Stack, Queue and DeQueue networks [dequeue15] were
+also shown to learn basic sequence transformations such as bigram flipping or
+sequence reversal.</p>
+
+<p>The Grid LSTM [gridLSTM15] is another powerful architecture that can learn to
+multiply <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>15</mn></mrow><annotation encoding="application/x-tex">15</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">15</span></span></span></span></span>-digit decimal numbers.
+As we will see in the next section, the Grid-LSTM is quite similar to the Neural GPU --
+the main difference is that the Neural GPU is less recurrent and is explicitly
+constructed from the highly parallel convolution operator.</p>
+
+<p>In image processing, *convolutional LSTMs*, an architecture similar to the Neural GPU,
+have recently been used for weather prediction [convLSTMweather] and image compression
+[convLSTMcompress]. We find it encouraging as it hints that the Neural GPU might perform well in other contexts.</p>
+
+<p>Most comparable to this work are the prior experiments with the
+stack-augmented RNNs [algo15]. These networks manage to learn and
+generalize to unseen lengths on a number of algorithmic tasks. But, as we show
+in Section~<a href="#sec:res" class="cross-ref">Section 2</a>, stack-augmented RNNs trained to add numbers up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn></mrow><annotation encoding="application/x-tex">20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span>-bit long generalize
+only to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo><mtext> ⁣</mtext><mtext> ⁣</mtext><mn>100</mn></mrow><annotation encoding="application/x-tex">\sim \!\! 100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></span>-bit numbers, never to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>200</mn></mrow><annotation encoding="application/x-tex">200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span></span>-bit ones, and never without error.
+Still, their generalization is the best we were able to obtain without using the Neural GPU
+and far surpasses a baseline LSTM sequence-to-sequence model with attention.</p>
+
+<p>The quest for learning algorithms has been pursued
+much more widely with tools other than neural networks.
+It is known under names such as program synthesis, program induction, automatic
+programming, or inductive synthesis, and has a long history
+with many works that we do not cover here;
+see, e.g.,~[G10surv] and [K10surv] for a more general perspective.</p>
+
+<p>Since one of our results is the synthesis of an algorithm for
+long binary addition, let us recall how this problem has been addressed
+without neural networks. Importantly, there are two cases of this problem
+with different complexity. The easier case is when the two numbers
+that are to be added are aligned at input, i.e., if the first (lower-endian)
+bit of the first number is presented at the same time as the first bit of
+the second number, then come the second bits, and so on, as depicted below
+for <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo>=</mo><mn>9</mn><mo>=</mo><mn>8</mn><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">x=9=8+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">9</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>=</mo><mn>5</mn><mo>=</mo><mn>4</mn><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">y=5=4+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span> written in binary with least-significant bit left.</p>
+
+<p>\begin{center}
+<table class="article-table">
+  <thead><tr>
+    <th>{\bf Input}</th>
+    <th>1</th>
+    <th>0</th>
+    <th>0</th>
+    <th>1</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>(<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi></mrow><annotation encoding="application/x-tex">y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span></span> aligned)</td>
+    <td>1</td>
+    <td>0</td>
+    <td>1</td>
+    <td>0</td>
+  </tr>
+  <tr>
+    <td>{\bf Desired Output (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo>+</mo><mi>y</mi></mrow><annotation encoding="application/x-tex">x+y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span></span>)}</td>
+    <td>0</td>
+    <td>1</td>
+    <td>1</td>
+    <td>1</td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\end{center}</p>
+
+<p>In this representation the triples of bits from <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mtext> </mtext><mi>y</mi><mo separator="true">,</mo><mtext> </mtext><mi>x</mi><mo>+</mo><mi>y</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x,\ y,\ x+y)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mclose">)</span></span></span></span></span>,
+e.g., <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo><mtext> </mtext><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">)</mo><mtext> </mtext><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">)</mo><mtext> </mtext><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1,1,0)\ (0,0,1)\ (0,1,1)\ (1,0,1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mclose">)</span><span class="mspace"> </span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mspace"> </span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mspace"> </span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span> as in the figure above, form a *regular* language.
+To learn binary addition in this representation it therefore suffices to find a regular
+expression or an automaton that accepts this language, which can be done with a variant
+of Anguin's algorithm [angluin87]. But only few interesting functions have
+regular representations, as for example long multiplication does not [BlGr00].
+It is therefore desirable to learn long binary addition without alignment,
+for example when <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi></mrow><annotation encoding="application/x-tex">y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span></span> are provided one after another.
+This is the representation we use in the present paper.</p>
+
+<p>\begin{center}
+<table class="article-table">
+  <thead><tr>
+    <th>{\bf Input (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo separator="true">,</mo><mi>y</mi></mrow><annotation encoding="application/x-tex">x,y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span></span>)}</th>
+    <th>1</th>
+    <th>0</th>
+    <th>0</th>
+    <th>1</th>
+    <th>+</th>
+    <th>1</th>
+    <th>0</th>
+    <th>1</th>
+    <th>0</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>{\bf Desired Output (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo>+</mo><mi>y</mi></mrow><annotation encoding="application/x-tex">x+y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span></span>)}</td>
+    <td>0</td>
+    <td>1</td>
+    <td>1</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\end{center}</p>
+
+<hr>
+
+<h2>2. The Neural GPU</h2>
+
+<span id="sec:cgrn" class="label-anchor"></span>
+
+<p>Before we introduce the Neural GPU, let us recall the architecture of
+a *Gated Recurrent Unit* (GRU) [cho2014learning].
+A GRU is similar to an LSTM, but its input and state are the same
+size, which makes it easier for us to generalize it later;  a highway network
+could have also been used [srivastava2015highway], but it lacks the reset gate.
+GRUs have shown performance similar to LSTMs on a number of tasks [gruEval14][lstmEval15].
+A GRU takes an input vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span> and a current state vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span>,
+and outputs:
+\[ \gru(x,s) \ \ =\ \ u \odot s + (1 - u) \odot \tanh(W x + U (r \odot s) + B) ,
+      \ \ \textrm{where} \]
+\[ u = \sigmoid(W'x + U's + B')\quad \mathrm{and}\quad r = \sigmoid(W''x + U''s + B''). \]</p>
+
+<p>In the equations above, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mo separator="true">,</mo><msup><mi>W</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo separator="true">,</mo><msup><mi>W</mi><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup><mo separator="true">,</mo><mi>U</mi><mo separator="true">,</mo><msup><mi>U</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo separator="true">,</mo><msup><mi>U</mi><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">W,W&#x27;,W&#x27;&#x27;,U,U&#x27;,U&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em;"></span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> are matrices and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi><mo separator="true">,</mo><msup><mi>B</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo separator="true">,</mo><msup><mi>B</mi><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">B,B&#x27;,B&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9463em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> are bias vectors;
+these are the parameters that will be learned. We write <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mi>x</mi></mrow><annotation encoding="application/x-tex">Wx</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span> for a matrix-vector multiplication
+and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>⊙</mo><mi>s</mi></mrow><annotation encoding="application/x-tex">r \odot s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span> for elementwise vector multiplication.
+The vectors <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span> are called *gates* since their elements are
+in <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[0,1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span></span></span></span></span> --- <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> is the *update* gate and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span> is the *reset* gate.</p>
+
+<p>In recurrent neural networks a unit like GRU is applied at every step
+and the result is both passed as new state and used to compute
+the output. In a Neural GPU we do not process a new input in every step.
+Instead, all inputs are written into the starting state <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">s_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>.
+This state has 2-dimensional structure: it consists of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mo>×</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">w \times h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span></span></span></span></span>
+vectors of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span></span> numbers, i.e., it is a 3-dimensional tensor of shape <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>w</mi><mo separator="true">,</mo><mi>h</mi><mo separator="true">,</mo><mi>m</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[w, h, m]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mclose">]</span></span></span></span></span>.
+This *mental image* evolves in time in a way defined by a
+*convolutional gated recurrent unit*:
+\[ \cgru(s) \ \ =\ \ u \odot s + (1 - u) \odot \tanh(U * (r \odot s) + B),
+     \ \ \textrm{where} \]
+\[ u = \sigmoid(U' * s + B')\quad \mathrm{and}\quad r = \sigmoid(U''*s + B''). \]</p>
+
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>U</mi><mo>∗</mo><mi>s</mi></mrow><annotation encoding="application/x-tex">U * s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span> above denotes the *convolution* of a *kernel bank* <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>U</mi></mrow><annotation encoding="application/x-tex">U</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">U</span></span></span></span></span> with the mental
+image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span>. A kernel bank is a 4-dimensional tensor of shape <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>k</mi><mi>w</mi></msub><mo separator="true">,</mo><msub><mi>k</mi><mi>h</mi></msub><mo separator="true">,</mo><mi>m</mi><mo separator="true">,</mo><mi>m</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[k_w, k_h, m, m]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mclose">]</span></span></span></span></span>, i.e.,
+it contains <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>w</mi></msub><mo>⋅</mo><msub><mi>k</mi><mi>h</mi></msub><mo>⋅</mo><msup><mi>m</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">k_w \cdot k_h \cdot m^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span> parameters, where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>w</mi></msub></mrow><annotation encoding="application/x-tex">k_w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>h</mi></msub></mrow><annotation encoding="application/x-tex">k_h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> are kernel
+width and height. It is applied to a mental image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span> of shape <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>w</mi><mo separator="true">,</mo><mi>h</mi><mo separator="true">,</mo><mi>m</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[w, h, m]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mclose">]</span></span></span></span></span> which results
+in another mental image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>U</mi><mo>∗</mo><mi>s</mi></mrow><annotation encoding="application/x-tex">U * s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span> of the same shape defined by:
+\[ U * s[x,y,i] \ \ =\ \ \sum_{u=\floor{-k_w/2}}^{\floor{k_w/2}}\sum_{v=\floor{-k_h/2}}^{\floor{k_h/2}}\sum_{c=1}^{m}
+     s[x+u,y+v,c] \cdot U[u,v,c,i]. \]
+
+<p>In the equation above the index <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo>+</mo><mi>u</mi></mrow><annotation encoding="application/x-tex">x+u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> might sometimes be negative or larger than
+the size of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span>, and in such cases we assume the value is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>. This corresponds to
+the standard convolution operator used in convolutional neural networks with zero padding
+on both sides and stride <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span>. Using the standard operator has the advantage that it is
+heavily optimized (see Section~<a href="#sec:discuss" class="cross-ref">Section 4</a> for Neural GPU performance).
+New work on faster convolutions, e.g., [fastconv], can be directly used in a Neural GPU.</p>
+
+<p>Knowing how a CGRU gate works, the definition of a <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi></mrow><annotation encoding="application/x-tex">l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span></span>-layer Neural GPU is simple, as depicted in Figure~<a href="#fig:cgrn" class="cross-ref">Fig. 1</a>.
+The given sequence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi><mo>=</mo><mo stretchy="false">(</mo><msub><mi>i</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>i</mi><mi>n</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">i = (i_1,\ldots,i_n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> discrete symbols from <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>I</mi><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{0,\dots,I\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mclose">}</span></span></span></span></span> is first embedded
+into the mental image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">s_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> by concatenating the vectors obtained from
+an embedding lookup of the input symbols into its first column.
+More precisely, we create the starting mental image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">s_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> of shape <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>w</mi><mo separator="true">,</mo><mi>n</mi><mo separator="true">,</mo><mi>m</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[w,n,m]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mclose">]</span></span></span></span></span> by using an embedding matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>E</mi></mrow><annotation encoding="application/x-tex">E</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">E</span></span></span></span></span> of shape <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mi>I</mi><mo separator="true">,</mo><mi>m</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[I, m]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">m</span><span class="mclose">]</span></span></span></span></span>
+and setting <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mn>0</mn></msub><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mi>k</mi><mo separator="true">,</mo><mo>:</mo><mo stretchy="false">]</mo><mo>=</mo><mi>E</mi><mo stretchy="false">[</mo><msub><mi>i</mi><mi>k</mi></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">s_0[0,k,:] = E[i_k]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">E</span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span></span> (in python notation) for all <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>1</mn><mo>…</mo><mi>n</mi></mrow><annotation encoding="application/x-tex">k=1 \dots n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>  (here <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>i</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>i</mi><mi>n</mi></msub></mrow><annotation encoding="application/x-tex">i_1,\ldots,i_n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">i</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> is the input).
+All other elements of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">s_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> are set to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>. Then, we apply <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi></mrow><annotation encoding="application/x-tex">l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span></span> different CGRU gates
+in turn for <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> steps to produce the final mental image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\sfin</mtext></mstyle></mrow><annotation encoding="application/x-tex">\sfin</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sfin</span></span></span></span></span></span>:
+\[ s_{t+1} = \cgru_l(\cgru_{l-1} \dots \cgru_1(s_t) \dots ) \quad
+     \mathrm{and} \quad \sfin = s_n. \]
+The result of a Neural GPU is produced by multiplying each item in
+the first column of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\sfin</mtext></mstyle></mrow><annotation encoding="application/x-tex">\sfin</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sfin</span></span></span></span></span></span> by an output matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi></mrow><annotation encoding="application/x-tex">O</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span></span></span></span></span> to obtain the logits
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>l</mi><mi>k</mi></msub><mo>=</mo><mi>O</mi><mstyle mathcolor="#cc0000"><mtext>\sfin</mtext></mstyle><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mi>k</mi><mo separator="true">,</mo><mo>:</mo><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">l_k = O \sfin[0,k,:]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0197em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sfin</span></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:</span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">]</span></span></span></span></span> and then selecting the maximal one: <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>o</mi><mi>k</mi></msub><mo>=</mo><mi mathvariant="normal">arg max</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>l</mi><mi>k</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">o_k = \argmax(l_k)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop"><span class="mord mathrm" style="margin-right:0.01389em;">arg</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathrm">max</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0197em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>. During training we use the standard loss function, i.e., we compute a softmax over the logits <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>l</mi><mi>k</mi></msub></mrow><annotation encoding="application/x-tex">l_k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0197em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and use the negative log probability of the target as the loss.</p>
+
+<p>Since all components of a Neural GPU are clearly differentiable, we can train using
+any stochastic gradient descent optimizer. For the results presented in
+this paper we used the Adam optimizer [adam] with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ε</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\varepsilon=10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">ε</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span></span> and gradients norm clipped to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span>.
+The number of layers was set to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">l=2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span></span>, the width of mental images
+was constant at <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">w=4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></span>, the number of maps in each mental image point was
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>24</mn></mrow><annotation encoding="application/x-tex">m=24</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">24</span></span></span></span></span>, and the convolution kernels width and height was always <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>k</mi><mi>w</mi></msub><mo>=</mo><msub><mi>k</mi><mi>h</mi></msub><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">k_w=k_h=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0315em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">h</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span></span>.</p>
+
+<p>**Computational power of Neural GPUs..**
+While the above definition is simple, it might not be immediately obvious
+what kind of functions a Neural GPU can compute. Why can we expect it
+to be able to perform long multiplication?
+To answer such questions it is useful to draw an analogy between a Neural GPU
+and a discrete 2-dimensional cellular automaton.
+Except for being discrete and the lack of a gating mechanism,
+such automata are quite similar to Neural GPUs.
+Of course, these are large exceptions.
+Dense representations have often more capacity than purely discrete
+states and the gating mechanism is crucial to avoid vanishing gradients
+during training. But the computational power of cellular automata is
+much better understood. In particular, it is well known that a cellular
+automaton can exploit its parallelism to multiply two <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-bit numbers
+in <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>n</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mclose">)</span></span></span></span></span> steps using Atrubin's algorithm.
+We recommend the online book [cabook] to get an understanding
+of this algorithm and the computational power of cellular automata.</p>
+
+<hr>
+
+<h2>3. Experiments</h2>
+
+<p>In this section, we present experiments showing that a Neural GPU
+can successfully learn a number of algorithmic tasks and generalize
+well beyond the lengths that it was trained on.
+We start with the two tasks we focused on, long binary addition and
+long binary multiplication. Then, to demonstrate the generality of the model,
+we show that Neural GPUs perform well on several other tasks as well.</p>
+
+### Addition and Multiplication <span id="sec:res" class="label-anchor"></span>
+
+<p>The two core tasks on which we study the performance of Neural GPUs are
+long binary addition and long binary multiplication.
+We chose them because they are fundamental tasks and because there
+is no known linear-time algorithm for long multiplication.
+As described in Section~<a href="#sec:cgrn" class="cross-ref">Section 1</a>, we input a sequence of
+discrete symbols into the network and we read out a sequence of symbols again.
+For binary addition, we use a set of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn></mrow><annotation encoding="application/x-tex">4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></span> symbols: <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo separator="true">,</mo><mo>+</mo><mo separator="true">,</mo><mrow><mi mathvariant="normal">P</mi><mi mathvariant="normal">A</mi><mi mathvariant="normal">D</mi></mrow><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{0,1,+,\mathrm{PAD}\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">+</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathrm">PAD</span></span><span class="mclose">}</span></span></span></span></span> and for
+multiplication we use <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo separator="true">,</mo><mo>⋅</mo><mo separator="true">,</mo><mrow><mi mathvariant="normal">P</mi><mi mathvariant="normal">A</mi><mi mathvariant="normal">D</mi></mrow><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{0,1,\cdot,\mathrm{PAD}\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">⋅</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathrm">PAD</span></span><span class="mclose">}</span></span></span></span></span>. The <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">P</mi><mi mathvariant="normal">A</mi><mi mathvariant="normal">D</mi></mrow><annotation encoding="application/x-tex">\mathrm{PAD}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord"><span class="mord mathrm">PAD</span></span></span></span></span></span>
+symbol is only used for padding so we depict it as empty space below.</p>
+
+<p>**Long binary addition (\texttt{badd.**)} is the task
+of adding two numbers represented lower-endian in binary
+notation. We always add numbers of the same length, but we allow
+them to have <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>s at start, so numbers of differing lengths can
+be padded to equal size. Given two <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span>-bit numbers the full
+sequence length is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>2</mn><mi>d</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n=2d+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span>, as seen in the example below,
+representing <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mn>4</mn><mo stretchy="false">)</mo><mo>+</mo><mo stretchy="false">(</mo><mn>2</mn><mo>+</mo><mn>4</mn><mo>+</mo><mn>8</mn><mo stretchy="false">)</mo><mo>=</mo><mn>5</mn><mo>+</mo><mn>14</mn><mo>=</mo><mn>19</mn><mo>=</mo><mo stretchy="false">(</mo><mn>16</mn><mo>+</mo><mn>2</mn><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1 + 4)+(2 + 4 + 8)=5+14=19=(16+2+1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">8</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">5</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">14</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">19</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">16</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span></span></span></span></span>.</p>
+
+<p>\begin{center}
+<table class="article-table">
+  <thead><tr>
+    <th>{\bf Input}</th>
+    <th>1</th>
+    <th>0</th>
+    <th>1</th>
+    <th>0</th>
+    <th>+</th>
+    <th>0</th>
+    <th>1</th>
+    <th>1</th>
+    <th>1</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>{\bf Output}</td>
+    <td>1</td>
+    <td>1</td>
+    <td>0</td>
+    <td>0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\end{center}</p>
+
+<p>**Long binary multiplication (\texttt{bmul.**)} is the task
+of multiplying two binary numbers, represented lower-endian.
+Again, we always multiply numbers of the same length, but we allow
+them to have <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>s at start, so numbers of differing lengths can
+be padded to equal size. Given two <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span>-bit numbers, the full
+sequence length is again <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>2</mn><mi>d</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">n=2d+1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord">2</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span>, as seen in the example below,
+representing <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>2</mn><mo>+</mo><mn>4</mn><mo stretchy="false">)</mo><mo>⋅</mo><mo stretchy="false">(</mo><mn>2</mn><mo>+</mo><mn>8</mn><mo stretchy="false">)</mo><mo>=</mo><mn>6</mn><mo>⋅</mo><mn>10</mn><mo>=</mo><mn>60</mn><mo>=</mo><mn>32</mn><mo>+</mo><mn>16</mn><mo>+</mo><mn>8</mn><mo>+</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">(2 + 4) \cdot (2 + 8) = 6 \cdot 10 = 60 = 32+16+8+4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">8</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">60</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">32</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">16</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></span>.</p>
+
+<p>\begin{center}
+<table class="article-table">
+  <thead><tr>
+    <th>{\bf Input}</th>
+    <th>0</th>
+    <th>1</th>
+    <th>1</th>
+    <th>0</th>
+    <th><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>⋅</mo></mrow><annotation encoding="application/x-tex">\cdot</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord">⋅</span></span></span></span></span></th>
+    <th>0</th>
+    <th>1</th>
+    <th>0</th>
+    <th>1</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>{\bf Output}</td>
+    <td>0</td>
+    <td>0</td>
+    <td>1</td>
+    <td>1</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\end{center}</p>
+
+<table class="article-table">
+  <caption>Neural GPU, stackRNN, and LSTM+A results on addition and multiplication.
+  The table shows the fraction of test cases for which every single bit of the model's output is correct.</caption>
+  <thead><tr>
+    <th>{\bf Task@Bits}</th>
+    <th>{\bf Neural GPU}</th>
+    <th>{\bf stackRNN}</th>
+    <th>{\bf LSTM+A}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\texttt{badd}@20</td>
+    <td>100\%</td>
+    <td>100\%</td>
+    <td>100\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{badd}@25</td>
+    <td>100\%</td>
+    <td>100\%</td>
+    <td>73\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{badd}@100</td>
+    <td>100\%</td>
+    <td>88\%</td>
+    <td>0\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{badd}@200</td>
+    <td>100\%</td>
+    <td>0\%</td>
+    <td>0\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{badd}@2000</td>
+    <td>100\%</td>
+    <td>0\%</td>
+    <td>0\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{bmul}@20</td>
+    <td>100\%</td>
+    <td>N/A</td>
+    <td>0\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{bmul}@25</td>
+    <td>100\%</td>
+    <td>N/A</td>
+    <td>0\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{bmul}@200</td>
+    <td>100\%</td>
+    <td>N/A</td>
+    <td>0\%</td>
+  </tr>
+  <tr>
+    <td>\texttt{bmul}@2000</td>
+    <td>100\%</td>
+    <td>N/A</td>
+    <td>0\%</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>**Models..**
+We compare three different models on the above tasks.
+In addition to the Neural GPU we include a baseline LSTM recurrent neural network with
+an attention mechanism. We call this model LSTM+A as it is exactly
+the same as described in [KVparse15]. It is a <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn></mrow><annotation encoding="application/x-tex">3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span></span>-layer
+model with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>64</mn></mrow><annotation encoding="application/x-tex">64</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">64</span></span></span></span></span> units in each LSTM cell in each layer, which results
+in about <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>200</mn></mrow><annotation encoding="application/x-tex">200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span></span>k parameters (the Neural GPU uses <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>24</mn></mrow><annotation encoding="application/x-tex">m=24</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">24</span></span></span></span></span> and has about <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>30</mn></mrow><annotation encoding="application/x-tex">30</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">30</span></span></span></span></span>k paramters).
+Both the Neural GPU and the LSTM+A baseline were trained using all the techniques
+described below, including curriculum training and gradient noise.
+Finally, on binary addition, we also include the stack-RNN model
+from [algo15]. This model was not trained using our training
+regime, but in exactly the way as provided in its source code,
+only with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mi>m</mi><mi>a</mi><mi>x</mi><mo>=</mo><mn>41</mn></mrow><annotation encoding="application/x-tex">nmax=41</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">nma</span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">41</span></span></span></span></span>. To match our training procedure, we ran it <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>729</mn></mrow><annotation encoding="application/x-tex">729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span> times
+(cf. Section~<a href="#sec:train" class="cross-ref">Section 3</a>) with different random seeds and we report the best obtained result.</p>
+
+<p>**Results..**
+We measure also the rate of *fully correct output sequences* and
+report the results in Table~<a href="#tab:res" class="cross-ref">Table 1</a>. For both tasks, we show first
+the error at the maximum length seen during training, i.e., for <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn></mrow><annotation encoding="application/x-tex">20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span>-bit
+numbers. Note that LSTM+A is not able to learn long binary multiplication
+at this length, it does not even fit the training data.
+Then we report numbers for sizes not seen during training.</p>
+
+<p>As you can see, a Neural GPU can learn a multiplication algorithm that
+generalizes perfectly, at least as far as we were able to test (technical
+limits of our implementation prevented us from testing much above <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span> bits).
+Even for the simpler task of binary addition, stack-RNNs work
+only up-to length <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn></mrow><annotation encoding="application/x-tex">100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></span>. This is still much better than the LSTM+A baseline
+which only generalizes to length <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>25</mn></mrow><annotation encoding="application/x-tex">25</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25</span></span></span></span></span>.</p>
+
+### Other Algorithmic Tasks
+
+<p>In addition to the two main tasks above, we tested Neural GPUs
+on the following simpler algorithmic tasks. The same 
+architecture as used above was able to solve all of the tasks
+described below, i.e., after being trained on sequences of length
+up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>41</mn></mrow><annotation encoding="application/x-tex">41</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">41</span></span></span></span></span> we were not able to find any error on sequences on
+any length we tested (up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4001</mn></mrow><annotation encoding="application/x-tex">4001</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4001</span></span></span></span></span>).</p>
+
+<p>**Copying sequences.** is the simple task of
+producing on output the same sequence as on input.
+It is very easy for a Neural GPU, in fact all models
+converge quickly and generalize perfectly.</p>
+
+<p>**Reversing sequences.** is the task of reversing
+a sequence of bits, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> is the length of the sequence.</p>
+
+<p>**Duplicating sequences.** is the task
+of duplicating the input bit sequence on output twice,
+as in the example below. We use the padding symbol on
+input to make it match the output length. We trained
+on sequences of inputs up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn></mrow><annotation encoding="application/x-tex">20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span> bits, so outputs
+were up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>40</mn></mrow><annotation encoding="application/x-tex">40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span></span>-bits long, and tested on inputs up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span> bits long.</p>
+
+<p>\begin{center}
+<table class="article-table">
+  <thead><tr>
+    <th>{\bf Input}</th>
+    <th>0</th>
+    <th>0</th>
+    <th>1</th>
+    <th>1</th>
+    <th></th>
+    <th></th>
+    <th></th>
+    <th></th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>{\bf Output}</td>
+    <td>0</td>
+    <td>0</td>
+    <td>1</td>
+    <td>1</td>
+    <td>0</td>
+    <td>0</td>
+    <td>1</td>
+    <td>1</td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\end{center}</p>
+
+<p>**Counting by sorting bits.** is the task
+of sorting the input bit sequence on output. 
+Since there are only <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn></mrow><annotation encoding="application/x-tex">2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span></span> symbols to sort, this
+is a counting tasks -- the network must count how many
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>s are in the input and produce the output accordingly,
+as in the example below.</p>
+
+<p>\begin{center}
+<table class="article-table">
+  <thead><tr>
+    <th>{\bf Input}</th>
+    <th>1</th>
+    <th>0</th>
+    <th>1</th>
+    <th>1</th>
+    <th>0</th>
+    <th>0</th>
+    <th>1</th>
+    <th>0</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>{\bf Output}</td>
+    <td>0</td>
+    <td>0</td>
+    <td>0</td>
+    <td>0</td>
+    <td>1</td>
+    <td>1</td>
+    <td>1</td>
+    <td>1</td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\end{center}</p>
+
+### Training Techniques <span id="sec:train" class="label-anchor"></span>
+
+<p>Here we describe the training methods that we used to improve our results.
+Note that we applied these methods to the LSTM+A baseline as well, to keep
+the above comparison fair. We focus on the most important elements of
+our training regime, all less relevant details can be found in the code
+which is released as open-source.</p>
+
+<p>**Grid search..**
+Each result we report is obtained by running a grid search over <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>3</mn><mn>6</mn></msup><mo>=</mo><mn>729</mn></mrow><annotation encoding="application/x-tex">3^6=729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord">3</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">6</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span>
+instances. We consider <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn></mrow><annotation encoding="application/x-tex">3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span></span> settings of the learning rate, initial parameters
+scale, and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn></mrow><annotation encoding="application/x-tex">4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></span> other hyperparameters discussed below: the relaxation pull factor,
+curriculum progress threshold, gradient noise scale, and dropout.
+An important effect of running this grid search is also that we train
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>729</mn></mrow><annotation encoding="application/x-tex">729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span> models with different random seeds every time. Usually only
+a few of these models generalize to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span>-bit numbers, but a significant
+fraction works well on <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>200</mn></mrow><annotation encoding="application/x-tex">200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span></span>-bit numbers, as discussed below.</p>
+
+<p>**Curriculum learning..**
+We use a curriculum learning approach inspired by [ZS14].
+This means that we train, e.g., on <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>7</mn></mrow><annotation encoding="application/x-tex">7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">7</span></span></span></span></span>-digit numbers only after crossing
+a curriculum progress threshold (e.g., over <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>90</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">90\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">90%</span></span></span></span></span> fully correct outputs)
+on <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>6</mn></mrow><annotation encoding="application/x-tex">6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span></span>-digit numbers. However, with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">20\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">20%</span></span></span></span></span> probability we pick a minibatch
+of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span>-digit numbers with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span> chosen uniformly at random between <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn></mrow><annotation encoding="application/x-tex">20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span>.</p>
+
+<p>**Gradients noise..**
+To improve training speed and stability we add noise to gradients
+in each training step. Inspired by the schedule from [gradNoise11],
+we add to gradients a noise drawn from the normal distribution
+with mean <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span> and variance inversely proportional to the square root of step-number
+(i.e., with standard deviation proportional to the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn></mrow><annotation encoding="application/x-tex">4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></span>-th root
+of step-number). We multiply this noise by the gradient noise scale
+and, to avoid noise in converged models, we also multiply it by
+the fraction of non-fully-correct outputs (which is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span> for a perfect model).</p>
+
+<p>**Gate cutoff..**
+In Section~<a href="#sec:cgrn" class="cross-ref">Section 1</a> we defined the gates in a CGRU using the sigmoid function,
+e.g., we wrote <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo>=</mo><mstyle mathcolor="#cc0000"><mtext>\sigmoid</mtext></mstyle><mo stretchy="false">(</mo><msup><mi>U</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>∗</mo><mi>s</mi><mo>+</mo><msup><mi>B</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">u = \sigmoid(U&#x27; * s + B&#x27;)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sigmoid</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0019em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>. Usually the standard
+sigmoid function is used, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\sigmoid</mtext></mstyle><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><msup><mi>e</mi><mrow><mo>−</mo><mi>x</mi></mrow></msup></mrow></mfrac></mrow><annotation encoding="application/x-tex">\sigmoid(x) = \frac{1}{1+e^{-x}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sigmoid</span></span><span class="mopen">(</span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2484em;vertical-align:-0.4033em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8451em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mbin mtight">+</span><span class="mord mtight"><span class="mord mathnormal mtight">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7027em;"><span style="top:-2.786em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mathnormal mtight">x</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4033em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>. We found
+that adding a hard threshold on the top and bottom helps slightly in
+our setting, so we use <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.2</mn><mstyle mathcolor="#cc0000"><mtext>\sigmoid</mtext></mstyle><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>−</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">1.2 \sigmoid(x) - 0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1.2</span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sigmoid</span></span><span class="mopen">(</span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span></span> cut to the interval <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[0,1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1</span><span class="mclose">]</span></span></span></span></span>,
+i.e., <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mstyle mathcolor="#cc0000"><mtext>\sigmoid</mtext></mstyle><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>1.2</mn><mstyle mathcolor="#cc0000"><mtext>\sigmoid</mtext></mstyle><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>−</mo><mn>0.1</mn><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\sigmoid&#x27;(x) = \max(0, \min(1, 1.2 \sigmoid(x) - 0.1))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1418em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sigmoid</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8918em;"><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">1.2</span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\sigmoid</span></span><span class="mopen">(</span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0.1</span><span class="mclose">))</span></span></span></span></span>.</p>
+
+#### Dropout on recurrent connections
+
+<p>Dropout is a widely applied technique for regularizing neural networks.
+But when applying it to recurrent networks, it has been counter-productive
+to apply it on recurrent connections -- it only worked when applied to
+the non-recurrent ones, as reported by [pham2014dropout].</p>
+
+<p>Since a Neural GPU does not have non-recurrent connections it might seem
+that dropout will not be useful for this architecture.
+Surprisingly, we found the contrary -- it is useful and improves
+generalization. The key to using dropout effectively in this
+setting is to set a small dropout rate.</p>
+
+<p>When we run a grid search for dropout rates we vary them between <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>6</mn><mi mathvariant="normal">%</mi><mo separator="true">,</mo><mn>9</mn><mi mathvariant="normal">%</mi><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">6\%, 9\%,</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9444em;vertical-align:-0.1944em;"></span><span class="mord">6%</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">9%</span><span class="mpunct">,</span></span></span></span></span>
+and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>13.5</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">13.5\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">13.5%</span></span></span></span></span>, meaning that over <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>85</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">85\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">85%</span></span></span></span></span> of the values are always preserved.
+It turns out that even this small dropout has large effect since we
+apply it to the whole mental image <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">s_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> in each step <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>.
+Presumably the network now learns to include some redundancy
+in its internal representation and generalization benefits from it.</p>
+
+<p>Without dropout we usually see only a few models from a <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>729</mn></mrow><annotation encoding="application/x-tex">729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span> grid search generalize reasonably,
+while with dropout it is a much larger fraction and they generalize to higher lengths.
+In particular, dropout was necessary to train models for multiplication that
+generalize to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span> bits.</p>
+
+#### Parameter sharing relaxation.
+
+<p>To improve optimization of our deep network we use a *relaxation*
+technique for shared parameters which works as follows. Instead of training
+with parameters shared across time-steps we use <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span> identical sets of non-shared
+parameters (we often use <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">r=6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span></span>, larger numbers work better but use more memory).
+At time-step <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span> of the Neural GPU we use the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>-th set if <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi><mtext> </mtext><mrow><mi mathvariant="normal">m</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">d</mi></mrow><mtext> </mtext><mi>r</mi><mo>=</mo><mi>i</mi></mrow><annotation encoding="application/x-tex">t\ \mathrm{mod}\ r = i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">t</span><span class="mspace"> </span><span class="mord"><span class="mord mathrm">mod</span></span><span class="mspace"> </span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>.</p>
+
+<p>The procedure described above relaxes the network, as it can now perform
+different operations in different time-steps. Training becomes easier,
+but we now have <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span> parameters instead of the single shared set we want.
+To unify them we add a term to the cost function representing the distance
+of each parameter from the average of this parameter in all the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span> sets.
+This term in the final cost function is multiplied by a scalar which we call
+the *relaxation pull*. If the relaxation pull is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0</mn></mrow><annotation encoding="application/x-tex">0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0</span></span></span></span></span>, the network behaves
+as if the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span> parameter sets were separate, but when it is large, the cost
+forces the network to unify the parameters across different set.</p>
+
+<p>During training, we gradually increase the relaxation pull.
+We start with a small value and every time the curriculum makes progress,
+e.g., when the model performs well on <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>6</mn></mrow><annotation encoding="application/x-tex">6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span></span>-digit numbers,
+we multiply the relaxation pull by a relaxation pull factor.
+When the curriculum reaches the maximal length we average the parameters
+from all sets and continue to train with a single shared parameter set.</p>
+
+<p>This method is  crucial for learning multiplication. Without it,
+a Neural GPU with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>24</mn></mrow><annotation encoding="application/x-tex">m=24</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">24</span></span></span></span></span> has trouble to even fit the training set,
+and the few models that manage to do it do not generalize.
+With relaxation almost all models in our <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>729</mn></mrow><annotation encoding="application/x-tex">729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span> runs manage to fit the training data.</p>
+
+<hr>
+
+<h2>4. Discussion</h2>
+
+<span id="sec:discuss" class="label-anchor"></span>
+
+<p>We prepared a video of the Neural GPU trained to solve the tasks
+mentioned above..
+It shows the state in each step with values of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">−</span><span class="mord">1</span></span></span></span></span> drawn in white,
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span> in black, and other in gray. This gives an intuition how
+the Neural GPU solves the discussed problems, e.g., it is quite
+clear that for the duplication task the Neural GPU learned to move a part
+of the embedding downwards in each step.</p>
+
+<p>**What did not work well?**</p>
+
+<p>For one, using decimal inputs degrades performance.
+All tasks above can easily be formulated with decimal
+inputs instead of binary ones. One could hope that a Neural GPU
+will work well in this case too, maybe with a larger <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span></span>.
+We experimented with this formulation and our results were
+worse than when the representation was binary: we did not
+manage to learn long decimal multiplication. Increasing
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span></span> to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>128</mn></mrow><annotation encoding="application/x-tex">128</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">128</span></span></span></span></span> allows to learn all other tasks in the decimal setting.</p>
+
+<p>Another problem is that often only a few models in a <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>729</mn></mrow><annotation encoding="application/x-tex">729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span> grid search generalize
+to very long unseen instances. Among those <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>729</mn></mrow><annotation encoding="application/x-tex">729</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">729</span></span></span></span></span> models, there
+usually are many models that generalize
+to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>40</mn></mrow><annotation encoding="application/x-tex">40</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">40</span></span></span></span></span> or even <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>200</mn></mrow><annotation encoding="application/x-tex">200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span></span> bits, but only a few working without error for <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span>-bit numbers.
+Using dropout and gradient noise improves the reliability of training and generalization,
+but maybe another technique could help even more. How could we make
+more models achieve good generalization? One idea that looks natural is
+to try to reduce the number of parameters by decreasing <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span></span>.
+Surprisingly, this does not seem to have any influence.
+In addition to the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>24</mn></mrow><annotation encoding="application/x-tex">m=24</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">24</span></span></span></span></span> results presented above we ran experiments
+with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>32</mn><mo separator="true">,</mo><mn>64</mn><mo separator="true">,</mo><mn>128</mn></mrow><annotation encoding="application/x-tex">m=32,64,128</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8389em;vertical-align:-0.1944em;"></span><span class="mord">32</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">64</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">128</span></span></span></span></span> and the results were similar.
+In fact using <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>128</mn></mrow><annotation encoding="application/x-tex">m=128</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">128</span></span></span></span></span> we got the most models to generalize.
+Additionally, we observed that ensembling a few models, just by
+averaging their outputs, helps to generalize: ensembles of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>5</mn></mrow><annotation encoding="application/x-tex">5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5</span></span></span></span></span>
+models almost always generalize perfectly on binary tasks.</p>
+
+<p>**Why use width?**
+The Neural GPU is defined using two-dimensional convolutions
+and in our experiments one of the dimensions is always set to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn></mrow><annotation encoding="application/x-tex">4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">4</span></span></span></span></span>.
+Doing so is not necessary since a one-dimensional Neural GPU that uses
+four times larger <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span></span> can represent every function representable
+by the original one.  In fact we trained a model for long binary
+multiplication that generalized to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span>-bit numbers using
+a Neural GPU with width <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn></mrow><annotation encoding="application/x-tex">1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>64</mn></mrow><annotation encoding="application/x-tex">m=64</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">64</span></span></span></span></span>.  However, the width of
+the Neural GPU increases the amount of information carried in
+its hidden state without increasing the number of its parameters.
+Thus it can be thought of as a factorization
+and might be useful for other tasks.</p>
+
+<p>**Speed and data efficiency.**
+Neural GPUs use the standard, heavily optimized convolution operation
+and are fast. We experimented with a <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn></mrow><annotation encoding="application/x-tex">2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span></span>-layer Neural GPU for <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi><mo>=</mo><mn>32</mn></mrow><annotation encoding="application/x-tex">n=32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">32</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>=</mo><mn>64</mn></mrow><annotation encoding="application/x-tex">m=64</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">64</span></span></span></span></span>.
+After unfolding in time it has <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>128</mn></mrow><annotation encoding="application/x-tex">128</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">128</span></span></span></span></span> layers of CGRUs, each operating on <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>32</mn></mrow><annotation encoding="application/x-tex">32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">32</span></span></span></span></span>
+mental images, each <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mo>×</mo><mn>64</mn><mo>×</mo><mn>64</mn></mrow><annotation encoding="application/x-tex">4 \times 64 \times 64</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.7278em;vertical-align:-0.0833em;"></span><span class="mord">64</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">64</span></span></span></span></span> . The joint forward-backward step
+time for this network was about <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.6</mn></mrow><annotation encoding="application/x-tex">0.6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.6</span></span></span></span></span>s on an NVIDIA GTX 970 GPU.</p>
+
+<p>We were also surprised by how data-efficient a Neural GPU can be.
+The experiments presented above were all performed using <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>10</mn></mrow><annotation encoding="application/x-tex">10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span></span>k
+random training data examples for each training length. Since we train
+on up-to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>20</mn></mrow><annotation encoding="application/x-tex">20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span>-bit numbers this adds to about <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>200</mn></mrow><annotation encoding="application/x-tex">200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span></span>k training examples.
+We tried to train using only <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn></mrow><annotation encoding="application/x-tex">100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></span> examples per length, so about <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2000</mn></mrow><annotation encoding="application/x-tex">2000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2000</span></span></span></span></span> total
+training instances. We were surprised to see that it actually worked well for
+binary addition: there were models that generalized well to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>200</mn></mrow><annotation encoding="application/x-tex">200</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">200</span></span></span></span></span>-bit numbers
+and to all lengths below despite such small training set. But we never managed
+to train a good model for binary multiplication with that little training data.</p>
+
+<hr>
+
+<h2>5. Conclusions and Future Work</h2>
+
+<p>The results presented in Table~<a href="#tab:res" class="cross-ref">Table 1</a> show clearly that there
+is a qualitative difference between what can be achieved with
+a Neural GPU and what was possible with previous architectures.
+In particular, for the first time, we show a neural
+network that learns a non-trivial superlinear-time algorithm in
+a way that generalized to much higher lengths without errors.</p>
+
+<p>This opens the way to use neural networks in domains that were
+previously only addressed by discrete methods, such as program synthesis.
+With the surprising data efficiency of Neural GPUs it could even be possible
+to replicate previous program synthesis results, e.g., [K12],
+but in a more scalable way. It is also interesting that a Neural GPU
+can learn symbolic algorithms without using any discrete state at all,
+and adding dropout and noise only improves its performance.</p>
+
+<p>Another promising future work is to apply Neural GPUs to language processing tasks.
+Good results have already been obtained on translation with a convolutional architecture
+over words [KalchbrennerB13] and adding gating and recursion, like in a Neural GPU,
+should allow to train much deeper models without overfitting.
+Finally, the parameter sharing relaxation technique can be applied
+to any deep recurrent network and has the potential to improve RNN training in general.</p>
+
+<p>\small
+\begin{thebibliography}{31}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi</p>
+
+<p>\bibitem[Angluin(1987)]{angluin87}
+Angluin, Dana.
+\newblock Learning regaular sets from queries and counterexamples.
+\newblock *Information and Computation*, 75:\penalty0 87--106, 1987.</p>
+
+<p>\bibitem[Bahdanau et al.(2014)Bahdanau, Cho, and Bengio]{bahdanau2014neural}
+Bahdanau, Dzmitry, Cho, Kyunghyun, and Bengio, Yoshua.
+\newblock Neural machine translation by jointly learning to align and
+  translate.
+\newblock *CoRR*, abs/1409.0473, 2014.
+\newblock URL [http://arxiv.org/abs/1409.0473](http://arxiv.org/abs/1409.0473).</p>
+
+<p>\bibitem[Blumensath \& Gr{\"a}del(2000)Blumensath and Gr{\"a}del]{BlGr00}
+Blumensath, Achim and Gr{\"a}del, Erich.
+\newblock {Automatic Structures}.
+\newblock In *{Proceedings of LICS 2000*}, pp.\  51--62, 2000.
+\newblock URL [http://www.logic.rwth-aachen.de/pub/graedel/BlGr-lics00.ps](http://www.logic.rwth-aachen.de/pub/graedel/BlGr-lics00.ps).</p>
+
+<p>\bibitem[Chan et al.(2016)Chan, Jaitly, Le, and Vinyals]{las16}
+Chan, William, Jaitly, Navdeep, Le, Quoc V., and Vinyals, Oriol.
+\newblock Listen, attend and spell.
+\newblock In *International Conference on Acoustics, Speech and Signal
+  Processing, {ICASSP*'16}, 2016.</p>
+
+<p>\bibitem[Cho et al.(2014)Cho, van Merrienboer, Gulcehre, Bougares, Schwenk, and
+  Bengio]{cho2014learning}
+Cho, Kyunghyun, van Merrienboer, Bart, Gulcehre, Caglar, Bougares, Fethi,
+  Schwenk, Holger, and Bengio, Yoshua.
+\newblock Learning phrase representations using rnn encoder-decoder for
+  statistical machine translation.
+\newblock *CoRR*, abs/1406.1078, 2014.
+\newblock URL [http://arxiv.org/abs/1406.1078](http://arxiv.org/abs/1406.1078).</p>
+
+<p>\bibitem[Chung et al.(2014)Chung, G{\"{u}}l{\c{c}}ehre, Cho, and
+  Bengio]{gruEval14}
+Chung, Junyoung, G{\"{u}}l{\c{c}}ehre, {\c{C}}aglar, Cho, Kyunghyun, and
+  Bengio, Yoshua.
+\newblock Empirical evaluation of gated recurrent neural networks on sequence
+  modeling.
+\newblock *CoRR*, abs/1412.3555, 2014.
+\newblock URL [http://arxiv.org/abs/1412.3555](http://arxiv.org/abs/1412.3555).</p>
+
+<p>\bibitem[Dahl et al.(2012)Dahl, Yu, Deng, and Acero]{dahl12}
+Dahl, George E., Yu, Dong, Deng, Li, and Acero, Alex.
+\newblock Context-dependent pre-trained deep neural networks for
+  large-vocabulary speech recognition.
+\newblock *{IEEE* Transactions on Audio, Speech {\&} Language Processing},
+  20\penalty0 (1):\penalty0 30--42, 2012.</p>
+
+<p>\bibitem[Graves et al.(2014)Graves, Wayne, and Danihelka]{ntm14}
+Graves, Alex, Wayne, Greg, and Danihelka, Ivo.
+\newblock Neural turing machines.
+\newblock *CoRR*, abs/1410.5401, 2014.
+\newblock URL [http://arxiv.org/abs/1410.5401](http://arxiv.org/abs/1410.5401).</p>
+
+<p>\bibitem[Grefenstette et al.(2015)Grefenstette, Hermann, Suleyman, and
+  Blunsom]{dequeue15}
+Grefenstette, Edward, Hermann, Karl Moritz, Suleyman, Mustafa, and Blunsom,
+  Phil.
+\newblock Learning to transduce with unbounded memory.
+\newblock *CoRR*, abs/1506.02516, 2015.
+\newblock URL [http://arxiv.org/abs/1506.02516](http://arxiv.org/abs/1506.02516).</p>
+
+<p>\bibitem[Greff et al.(2015)Greff, Srivastava, Koutn{\'{\i}}k, Steunebrink, and
+  Schmidhuber]{lstmEval15}
+Greff, Klaus, Srivastava, Rupesh Kumar, Koutn{\'{\i}}k, Jan, Steunebrink,
+  Bas R., and Schmidhuber, J{\"{u}}rgen.
+\newblock {LSTM:} {A} search space odyssey.
+\newblock *CoRR*, abs/1503.04069, 2015.
+\newblock URL [http://arxiv.org/abs/1503.04069](http://arxiv.org/abs/1503.04069).</p>
+
+<p>\bibitem[Gulwani(2010)]{G10surv}
+Gulwani, Sumit.
+\newblock Dimensions in program synthesis.
+\newblock In *Proceedings of PPDP 2010*, PPDP '10, pp.\  13--24, 2010.</p>
+
+<p>\bibitem[Hochreiter \& Schmidhuber(1997)Hochreiter and
+  Schmidhuber]{hochreiter1997}
+Hochreiter, Sepp and Schmidhuber, J{\"u}rgen.
+\newblock Long short-term memory.
+\newblock *Neural computation*, 9\penalty0 (8):\penalty0 1735--1780, 1997.</p>
+
+<p>\bibitem[Joulin \& Mikolov(2015)Joulin and Mikolov]{algo15}
+Joulin, Armand and Mikolov, Tomas.
+\newblock Inferring algorithmic patterns with stack-augmented recurrent nets.
+\newblock *CoRR*, abs/1503.01007, 2015.
+\newblock URL [http://arxiv.org/abs/1503.01007](http://arxiv.org/abs/1503.01007).</p>
+
+<p>\bibitem[Kaiser(2012)]{K12}
+Kaiser, {\L}ukasz.
+\newblock Learning games from videos guided by descriptive complexity.
+\newblock In *Proceedings of the AAAI-12*, pp.\  963--970. AAAI Press,
+  2012.
+\newblock URL [http://goo.gl/mRbfV5](http://goo.gl/mRbfV5).</p>
+
+<p>\bibitem[Kalchbrenner \& Blunsom(2013)Kalchbrenner and
+  Blunsom]{KalchbrennerB13}
+Kalchbrenner, Nal and Blunsom, Phil.
+\newblock Recurrent continuous translation models.
+\newblock In *Proceedings {EMNLP* 2013}, pp.\  1700--1709, 2013.
+\newblock URL [http://nal.co/papers/KalchbrennerBlunsom_EMNLP13](http://nal.co/papers/KalchbrennerBlunsom_EMNLP13).</p>
+
+<p>\bibitem[Kalchbrenner et al.(2016)Kalchbrenner, Danihelka, and
+  Graves]{gridLSTM15}
+Kalchbrenner, Nal, Danihelka, Ivo, and Graves, Alex.
+\newblock Grid long short-term memory.
+\newblock In *International Conference on Learning Representations*, 2016.
+\newblock URL [http://arxiv.org/abs/1507.01526](http://arxiv.org/abs/1507.01526).</p>
+
+<p>\bibitem[Kingma \& Ba(2014)Kingma and Ba]{adam}
+Kingma, Diederik P. and Ba, Jimmy.
+\newblock Adam: {A} method for stochastic optimization.
+\newblock *CoRR*, abs/1412.6980, 2014.
+\newblock URL [http://arxiv.org/abs/1412.6980](http://arxiv.org/abs/1412.6980).</p>
+
+<p>\bibitem[Kitzelmann(2010)]{K10surv}
+Kitzelmann, Emanuel.
+\newblock Inductive programming: A survey of program synthesis techniques.
+\newblock In *Approaches and Applications of Inductive Programming, AAIP
+  2009*, volume 5812 of *LNCS*, pp.\  50--73, 2010.</p>
+
+<p>\bibitem[Krizhevsky et al.(2012)Krizhevsky, Sutskever, and Hinton]{img12}
+Krizhevsky, Alex, Sutskever, Ilya, and Hinton, Geoffrey.
+\newblock Imagenet classification with deep convolutional neural network.
+\newblock In *Advances in Neural Information Processing Systems*, 2012.</p>
+
+<p>\bibitem[Lavin \& Gray(2015)Lavin and Gray]{fastconv}
+Lavin, Andrew and Gray, Scott.
+\newblock Fast algorithms for convolutional neural networks.
+\newblock *CoRR*, abs/1509.09308, 2015.
+\newblock URL [http://arxiv.org/abs/1509.09308](http://arxiv.org/abs/1509.09308).</p>
+
+<p>\bibitem[Pham et al.(2014)Pham, Bluche, Kermorvant, and
+  Louradour]{pham2014dropout}
+Pham, Vu, Bluche, Th{\'e}odore, Kermorvant, Christopher, and Louradour,
+  J{\'e}r{\^o}me.
+\newblock Dropout improves recurrent neural networks for handwriting
+  recognition.
+\newblock In *International Conference on Frontiers in Handwriting
+  Recognition (ICFHR)*, pp.\  285--290. IEEE, 2014.
+\newblock URL [http://arxiv.org/pdf/1312.4569.pdf](http://arxiv.org/pdf/1312.4569.pdf).</p>
+
+<p>\bibitem[Shi et al.(2015)Shi, Chen, Wang, Yeung, kin Wong, and chun
+  Woo]{convLSTMweather}
+Shi, Xingjian, Chen, Zhourong, Wang, Hao, Yeung, Dit-Yan, kin Wong, Wai, and
+  chun Woo, Wang.
+\newblock Convolutional {LSTM} network: A machine learning approach for
+  precipitation nowcasting.
+\newblock In *Advances in Neural Information Processing Systems*, 2015.
+\newblock URL [http://arxiv.org/abs/1506.04214](http://arxiv.org/abs/1506.04214).</p>
+
+<p>\bibitem[Srivastava et al.(2015)Srivastava, Greff, and
+  Schmidhuber]{srivastava2015highway}
+Srivastava, Rupesh Kumar, Greff, Klaus, and Schmidhuber, J{\"u}rgen.
+\newblock Highway networks.
+\newblock *CoRR*, abs/1505.00387, 2015.
+\newblock URL [http://arxiv.org/abs/1505.00387](http://arxiv.org/abs/1505.00387).</p>
+
+<p>\bibitem[Sutskever et al.(2014)Sutskever, Vinyals, and Le]{sutskever14}
+Sutskever, Ilya, Vinyals, Oriol, and Le, Quoc VV.
+\newblock Sequence to sequence learning with neural networks.
+\newblock In *Advances in Neural Information Processing Systems*, pp.\
+  3104--3112, 2014.
+\newblock URL [http://arxiv.org/abs/1409.3215](http://arxiv.org/abs/1409.3215).</p>
+
+<p>\bibitem[Toderici et al.(2016)Toderici, O'Malley, Hwang, Vincent, Minnen,
+  Baluja, Covell, and Sukthankar]{convLSTMcompress}
+Toderici, George, O'Malley, Sean M., Hwang, Sung Jin, Vincent, Damien, Minnen,
+  David, Baluja, Shumeet, Covell, Michele, and Sukthankar, Rahul.
+\newblock Variable rate image compression with recurrent neural networks.
+\newblock In *International Conference on Learning Representations*, 2016.
+\newblock URL [http://arxiv.org/abs/1511.06085](http://arxiv.org/abs/1511.06085).</p>
+
+<p>\bibitem[{Vinyals {\&} Kaiser} et al.(2015){Vinyals {\&} Kaiser}, Koo, Petrov,
+  Sutskever, and Hinton]{KVparse15}
+{Vinyals {\&} Kaiser}, Koo, Petrov, Sutskever, and Hinton.
+\newblock Grammar as a foreign language.
+\newblock In *Advances in Neural Information Processing Systems*, 2015.
+\newblock URL [http://arxiv.org/abs/1412.7449](http://arxiv.org/abs/1412.7449).</p>
+
+<p>\bibitem[Vinyals et al.(2014)Vinyals, Toshev, Bengio, and
+  Erhan]{vinyals2014show}
+Vinyals, Oriol, Toshev, Alexander, Bengio, Samy, and Erhan, Dumitru.
+\newblock Show and tell: A neural image caption generator.
+\newblock *CoRR*, abs/1411.4555, 2014.
+\newblock URL [http://arxiv.org/abs/1411.4555](http://arxiv.org/abs/1411.4555).</p>
+
+<p>\bibitem[Vivien(2003)]{cabook}
+Vivien, Helene.
+\newblock *An Introduction to cellular automata*.
+\newblock 2003.
+\newblock URL
+  [http://www.liafa.univ-paris-diderot.fr/ yunes/ca/archives/bookvivien.pdf](http://www.liafa.univ-paris-diderot.fr/ yunes/ca/archives/bookvivien.pdf).</p>
+
+<p>\bibitem[Welling \& Teh(2011)Welling and Teh]{gradNoise11}
+Welling, Max and Teh, Yee Whye.
+\newblock Bayesian learning via stochastic gradient {L}angevin dynamics.
+\newblock In *Proceedings of {ICML* 2011}, pp.\  681--688, 2011.</p>
+
+<p>\bibitem[Zaremba \& Sutskever(2015{\natexlab{a}})Zaremba and Sutskever]{ZS14}
+Zaremba, Wojciech and Sutskever, Ilya.
+\newblock Learning to execute.
+\newblock *CoRR*, abs/1410.4615, 2015{\natexlab{a}}.
+\newblock URL [http://arxiv.org/abs/1410.4615](http://arxiv.org/abs/1410.4615).</p>
+
+<p>\bibitem[Zaremba \& Sutskever(2015{\natexlab{b}})Zaremba and
+  Sutskever]{reinforceNTM15}
+Zaremba, Wojciech and Sutskever, Ilya.
+\newblock Reinforcement learning neural turing machines.
+\newblock *CoRR*, abs/1505.00521, 2015{\natexlab{b}}.
+\newblock URL [http://arxiv.org/abs/1505.00521](http://arxiv.org/abs/1505.00521).</p>
+
+<p>\end{thebibliography}</p>
+
+<hr>
+
+<h2>References</h2>
+<ol class="references">
+</ol>

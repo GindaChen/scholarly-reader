@@ -1,0 +1,33 @@
+title: Neural GPUs Learn Algorithms
+short_title: Neural GPUs Learn Algorithms
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1511.08228
+pdf: https://arxiv.org/pdf/1511.08228
+arxiv_id: '1511.08228'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1511.08228
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Learning an algorithm from examples is a fundamental problem that has been widely studied.
+  It has been addressed using neural networks too, in particular by Neural Turing Machines (NTMs).
+  These are fully differentiable computers that use backpropagation to learn their own programming.
+  Despite their appeal NTMs have a weakness that is caused by their sequential nature:
+  they are not parallel and are are hard to train due to their large depth when unfolded.
+
+  We present a neural network architecture
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 0
+reference_count: 31
+sections: 5
+figures: 1

@@ -1,0 +1,26 @@
+title: Dark Matter 2014
+short_title: Dark Matter 2014
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1501.01200
+pdf: https://arxiv.org/pdf/1501.01200
+arxiv_id: '1501.01200'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1501.01200
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: ''
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 6
+reference_count: 61
+sections: 5
+figures: 4

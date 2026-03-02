@@ -1,5 +1,5 @@
-title: Empirical Evaluation of Gated Recurrent Neural Networks \\ on Sequence Modeling
-short_title: Empirical Evaluation of Gated Recurrent …
+title: Empirical Evaluation of  Gated Recurrent Neural Networks  on Sequence Modeling
+short_title: Empirical Evaluation of  Gated Recurrent…
 type: journal-article
 authors: []
 date: '2026-03-02'
@@ -9,7 +9,7 @@ arxiv_id: '1412.3555'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1412.3555
 source: arxiv-pipeline
-pipeline_version: '2.1'
+pipeline_version: '2.0'
 tags:
   - auto-imported
   - arxiv-pipeline

@@ -9,7 +9,7 @@ arxiv_id: '1406.1078'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1406.1078
 source: arxiv-pipeline
-pipeline_version: '2.1'
+pipeline_version: '2.0'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -27,7 +27,7 @@ files:
     description: Rendered with KaTeX math and extracted figures
     primary: true
 variable_count: 0
-equation_count: 28
+equation_count: 26
 reference_count: 32
 sections: 8
 figures: 7

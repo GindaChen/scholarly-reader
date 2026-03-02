@@ -1,0 +1,585 @@
+<h1>Grammar as a Foreign Language</h1>
+
+<p class="authors"></p>
+
+<h2>Abstract</h2>
+<p>Syntactic constituency parsing is a fundamental problem in natural
+language processing and has been the subject of intensive research
+and engineering for decades.  As a result, the most accurate parsers
+are domain specific, complex, and inefficient.  In this paper we show
+that the domain agnostic attention-enhanced sequence-to-sequence model
+achieves state-of-the-art results on the most widely used syntactic
+constituency parsing dataset, when trained on a large synthetic
+corpus that was annotated using existing parsers.  It also matches the
+performance of standard parsers when trained only on a small
+human-annotated dataset, which shows that this model is highly
+data-efficient, in contrast to sequence-to-sequence models without the
+attention mechanism.  Our parser is also fast, processing over a
+hundred sentences per second with an unoptimized CPU implementation.</p>
+
+<hr>
+
+<h2>1. Introduction</h2>
+
+<span id="sec:intro" class="label-anchor"></span>
+
+<p>Syntactic constituency parsing is a fundamental problem in linguistics
+and natural language processing that has a wide range of applications.
+This problem has been the subject of intense research for decades, and
+as a result, there exist highly accurate domain-specific parsers.
+The computational requirements of traditional parsers are cubic in
+sentence length, and while linear-time shift-reduce constituency parsers
+improved in accuracy in recent years, they never matched state-of-the-art.
+Furthermore, standard parsers have been designed with parsing in mind;
+the concept of a parse tree is deeply ingrained into these systems,
+which makes these methods inapplicable to other problems.</p>
+
+<p>Recently, Sutskever et al.~[sutskever14] introduced a neural
+network model for solving the general sequence-to-sequence problem,
+and Bahdanau et al.~[bahdanau2014neural] proposed a related model
+with an attention mechanism that makes it capable of handling long
+sequences well.  Both models achieve state-of-the-art results on large
+scale machine translation tasks (e.g., [thang14][jean2014using]).
+Syntactic constituency parsing can be formulated as a
+sequence-to-sequence problem if we linearize the parse tree
+(cf. Figure ~<a href="#fig:task-example" class="cross-ref">Fig. 2</a>), so we can apply these models to
+parsing as well.</p>
+
+<p>Our early experiments focused on the sequence-to-sequence model of
+Sutskever et al.~[sutskever14].  We found this model to work poorly
+when we trained it on standard human-annotated parsing datasets (1M tokens),
+so we constructed an artificial dataset by labelling a large corpus with
+the BerkeleyParser.  To our surprise, the sequence-to-sequence model
+matched the BerkeleyParser that produced the annotation, having
+achieved an F1 score of 90.5 on the test set (section 23 of the WSJ).</p>
+
+<p>We suspected that the attention model of
+Bahdanau et al.~[bahdanau2014neural] might be more data efficient
+and we found that it is indeed the case.  We trained a sequence-to-sequence
+model with attention on the small human-annotated parsing dataset and were
+able to achieve an F1 score of 88.3 on section 23 of the WSJ
+without the use of an ensemble and 90.5 with an ensemble, which matches
+the performance of the BerkeleyParser (90.4) when trained on the same data.</p>
+
+<p>Finally, we constructed a second artificial dataset consisting of only
+high-confidence parse trees, as measured by the agreement of two
+parsers.  We trained a sequence-to-sequence model with attention on this
+data and achieved an F1 score of 92.5 on section 23 of the WSJ -- a new
+state-of-the-art.  This result did not require an ensemble, and as a result,
+the parser is also very fast. An ensemble further improves the score to 92.8.</p>
+
+<p>\vspace{-0mm}</p>
+
+<hr>
+
+<h2>2. LSTM+A Parsing Model</h2>
+
+<span id="sec:model" class="label-anchor"></span>
+
+<p>\newcommand\cb[1]{)<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;#&#x27; at position 11: _{\mathrm{#̲1}}" style="color:#cc0000">_{\mathrm{#1}}</span></span>}
+\newcommand\pair[2]{<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">⟨</mo></mrow><annotation encoding="application/x-tex">\langle</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">⟨</span></span></span></span></span>#1{<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span></span></span></span></span>}#2<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">⟩</mo></mrow><annotation encoding="application/x-tex">\rangle</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mclose">⟩</span></span></span></span></span>}
+\newcommand\eos{{\small \textsc{end}}}</p>
+
+<p>Let us first recall the sequence-to-sequence LSTM model.
+The Long Short-Term Memory model of [hochreiter1997]
+is defined as follows.  Let <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">x_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">h_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">m_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> be the input, control
+state, and memory state at timestep <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>.
+Given a sequence of inputs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>x</mi><mi>T</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x_1,\ldots,x_T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>, the LSTM computes
+the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span></span></span></span></span>-sequence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>h</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>h</mi><mi>T</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(h_1,\ldots,h_T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> and
+the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">m</span></span></span></span></span>-sequence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>m</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>m</mi><mi>T</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(m_1,\ldots,m_T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> as follows.
+\begin{eqnarray*}
+i_t &=& \mathrm{sigm}(W_1 x_t + W_2 h_{t-1}) \\
+i'_t &=& \tanh(W_3 x_t + W_4 h_{t-1}) \\
+f_t &=& \mathrm{sigm}(W_5 x_t + W_6 h_{t-1}) \\
+o_t &=& \mathrm{sigm}(W_7 x_t + W_8 h_{t-1}) \\
+m_t &=& m_{t-1}\odot f_t + i_t \odot i'_t \\
+h_t &=& m_t\odot o_t
+\end{eqnarray*}
+The operator <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>⊙</mo></mrow><annotation encoding="application/x-tex">\odot</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6667em;vertical-align:-0.0833em;"></span><span class="mord">⊙</span></span></span></span></span> denotes element-wise multiplication,
+the matrices <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>W</mi><mn>8</mn></msub></mrow><annotation encoding="application/x-tex">W_1,\ldots,W_8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">8</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and the vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">h_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> are the parameters
+of the model, and all the nonlinearities are computed element-wise.</p>
+
+<p>In a deep LSTM, each subsequent layer uses the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span></span></span></span></span>-sequence of the previous
+layer for its input sequence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span>. The deep LSTM defines a distribution over
+output sequences given an input sequence:
+\begin{eqnarray*}
+P(B|A) &=& \prod_{t=1}^{T_B} P(B_t|A_1,\ldots,A_{T_A},B_1,\ldots,B_{t-1}) \\
+       &\equiv& \prod_{t=1}^{T_B}\mathrm{softmax}(W_\mathrm{o} \cdot h_{T_A+t})^\top \delta_{B_t},
+\end{eqnarray*}
+The above equation assumes a deep LSTM whose input sequence is
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mo>=</mo><mo stretchy="false">(</mo><msub><mi>A</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>A</mi><msub><mi>T</mi><mi>A</mi></msub></msub><mo separator="true">,</mo><msub><mi>B</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>B</mi><msub><mi>T</mi><mi>B</mi></msub></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">x = (A_1,\ldots,A_{T_A},B_1,\ldots,B_{T_B})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0003em;vertical-align:-0.2503em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05017em;">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>, so <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">h_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> denotes <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>-th element
+of the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span></span></span></span></span>-sequence of topmost LSTM.
+The matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mi mathvariant="normal">o</mi></msub></mrow><annotation encoding="application/x-tex">W_{\mathrm{o}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathrm mtight">o</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> consists of the vector representations of
+each output symbol and the symbol <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>δ</mi><mi>b</mi></msub></mrow><annotation encoding="application/x-tex">\delta_b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03785em;">δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0379em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> is a Kronecker
+delta with a dimension for each output symbol,
+so <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">f</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">m</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">x</mi></mrow><mo stretchy="false">(</mo><msub><mi>W</mi><mi mathvariant="normal">o</mi></msub><mo>⋅</mo><msub><mi>h</mi><mrow><msub><mi>T</mi><mi>A</mi></msub><mo>+</mo><mi>t</mi></mrow></msub><msup><mo stretchy="false">)</mo><mi mathvariant="normal">⊤</mi></msup><msub><mi>δ</mi><msub><mi>B</mi><mi>t</mi></msub></msub></mrow><annotation encoding="application/x-tex">\mathrm{softmax}(W_\mathrm{o} \cdot h_{T_A + t})^\top \delta_{B_t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">softmax</span></span><span class="mopen">(</span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathrm mtight">o</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0994em;vertical-align:-0.2503em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span><span class="mbin mtight">+</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03785em;">δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0379em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2963em;"><span style="top:-2.357em;margin-left:-0.0502em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2501em;"><span></span></span></span></span></span></span></span></span></span></span> is precisely
+the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>B</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">B_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>'th element of the distribution defined by the softmax.
+Every output sequence terminates with a special end-of-sequence token which is
+necessary in order to define a distribution over sequences of variable lengths.
+We use two different sets of LSTM parameters, one for the input sequence and
+one for the output sequence, as shown in Figure <a href="#fig:model" class="cross-ref">Fig. 1</a>.
+Stochastic gradient descent is used to maximize the training objective
+which is the average over the training set of the log probability
+of the correct output sequence given the input sequence.</p>
+
+### Attention Mechanism
+<span id="sec:attention" class="label-anchor"></span>
+An important extension of the sequence-to-sequence model is by adding an
+attention mechanism. We adapted the attention model from [bahdanau2014neural]
+which, to produce each output symbol <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>B</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">B_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, uses an attention mechanism over
+the encoder LSTM states. Similar to our sequence-to-sequence model described
+in the previous section, we use two separate LSTMs (one to encode the sequence
+of input words <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>A</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">A_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, and another one to produce or decode the output
+symbols <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>B</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">B_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0502em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>). Recall that the encoder hidden states are denoted
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>h</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>h</mi><msub><mi>T</mi><mi>A</mi></msub></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(h_1,\ldots,h_{T_A})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0003em;vertical-align:-0.2503em;"></span><span class="mopen">(</span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> and we denote the hidden states of the decoder by
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>d</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>d</mi><msub><mi>T</mi><mi>B</mi></msub></msub><mo stretchy="false">)</mo><mo>:</mo><mo>=</mo><mo stretchy="false">(</mo><msub><mi>h</mi><mrow><msub><mi>T</mi><mi>A</mi></msub><mo>+</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>h</mi><mrow><msub><mi>T</mi><mi>A</mi></msub><mo>+</mo><msub><mi>T</mi><mi>B</mi></msub></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(d_1,\ldots,d_{T_B}) := (h_{T_A+1},\ldots,h_{T_A+T_B})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0003em;vertical-align:-0.2503em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05017em;">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">:=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0003em;vertical-align:-0.2503em;"></span><span class="mopen">(</span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span><span class="mbin mtight">+</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567em;margin-left:-0.1389em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05017em;">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1433em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2503em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>.
+
+<p>To compute the attention vector at each output time <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span> over the input
+words <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>T</mi><mi>A</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1,\ldots,T_A)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> we define:
+\begin{eqnarray*}
+u^t_i &=& v^T \tanh (W'_1 h_i + W'_2 d_t)\\
+a^t_i &=& \mathrm{softmax}(u^t_i) <span id="eqn:attn" class="label-anchor"></span>\\
+d'_t &=& \sum_{i=1}^{T_A} a^t_i  h_i
+\end{eqnarray*}
+The vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>v</mi></mrow><annotation encoding="application/x-tex">v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span></span> and matrices <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>W</mi><mn>1</mn><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup><mo separator="true">,</mo><msubsup><mi>W</mi><mn>2</mn><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">W&#x27;_1, W&#x27;_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.2481em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4519em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4519em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span></span></span></span></span> are learnable parameters of the model.
+The vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>u</mi><mi>t</mi></msup></mrow><annotation encoding="application/x-tex">u^t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7936em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7936em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span></span></span></span></span></span></span></span> has length <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>A</mi></msub></mrow><annotation encoding="application/x-tex">T_A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and its <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>-th item contains a score of
+how much attention should be put on the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>-th hidden encoder state <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">h_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>.
+These scores are normalized by softmax to create the attention mask <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>a</mi><mi>t</mi></msup></mrow><annotation encoding="application/x-tex">a^t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7936em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7936em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span></span></span></span></span></span></span></span> over
+encoder hidden states.
+In all our experiments, we use the same hidden dimensionality (256) at
+the encoder and the decoder, so <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>v</mi></mrow><annotation encoding="application/x-tex">v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span></span> is a vector and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>W</mi><mn>1</mn><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">W&#x27;_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.2481em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4519em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>W</mi><mn>2</mn><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">W&#x27;_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.2481em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.4519em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2481em;"><span></span></span></span></span></span></span></span></span></span></span> are
+square matrices. Lastly, we concatenate <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>d</mi><mi>t</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msubsup></mrow><annotation encoding="application/x-tex">d&#x27;_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9989em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span></span></span></span></span> with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">d_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, which becomes
+the new hidden state from which we make predictions, and which is fed to
+the next time step in our recurrent model.</p>
+
+<p>In Section~<a href="#sec:analysis" class="cross-ref">Section 5</a> we provide an analysis of what the attention
+mechanism learned, and we visualize the normalized attention vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>a</mi><mi>t</mi></msup></mrow><annotation encoding="application/x-tex">a^t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7936em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7936em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span></span></span></span></span></span></span></span> for
+all <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span> in Figure~<a href="#fig:attention" class="cross-ref">Fig. 4</a>.</p>
+
+### Linearizing Parsing Trees
+
+<p>To apply the model described above to parsing, we need to design an
+invertible way of converting the parse tree into a sequence (linearization).
+We do this in a very simple way following a depth-first
+traversal order, as depicted in Figure~<a href="#fig:task-example" class="cross-ref">Fig. 2</a>.</p>
+
+<p>We use the above model for parsing in the following way.
+First, the network consumes the sentence in a left-to-right sweep,
+creating vectors in memory. Then, it outputs the linearized parse tree
+using information in these vectors. As described below, we use 3 LSTM layers,
+reverse the input sentence and normalize part-of-speech tags.
+An example run of our LSTM+A model on the sentence ``Go.'' is depicted in
+Figure <a href="#fig:model" class="cross-ref">Fig. 1</a> (top gray edges illustrate attention).</p>
+
+### Parameters and Initialization
+
+<p>**Sizes..**
+In our experiments we used a model with 3 LSTM layers and 256 units
+in each layer, which we call LSTM+A. Our input vocabulary size was 90K
+and we output 128 symbols.</p>
+
+<p>**Dropout..**
+Training on a small dataset we additionally used 2 dropout layers, one
+between LSTM<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mn>1</mn></msup></mrow><annotation encoding="application/x-tex">^1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> and LSTM<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span>, and one between LSTM<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span> and LSTM<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mn>3</mn></msup></mrow><annotation encoding="application/x-tex">^3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span></span>.
+We call this model LSTM+A+D.</p>
+
+<p>**POS-tag normalization..**
+Since part-of-speech (POS) tags are not evaluated in the syntactic parsing F1
+score, we replaced all of them by ``XX'' in the training data. This improved
+our F1 score by about 1 point, which is surprising: For standard parsers,
+including POS tags in training data helps significantly. All experiments
+reported below are performed with normalized POS tags.</p>
+
+<p>**Input reversing..**
+We also found it useful to reverse the input sentences but not their parse
+trees, similarly to [sutskever14].
+Not reversing the input had a small negative impact on the F1 score on our
+development set (about <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.2</mn></mrow><annotation encoding="application/x-tex">0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span></span> absolute).
+All experiments reported below are performed with input reversing.</p>
+
+<p>**Pre-training word vectors..**
+The embedding layer for our 90K vocabulary can be initialized randomly or
+using pre-trained word-vector embeddings. We pre-trained skip-gram embeddings
+of size 512 using \texttt{word2vec} [mikolov2013efficient] on a 10B-word
+corpus. These embeddings were used to initialize our network but not fixed,
+they were later modified during training. We discuss the impact of pre-training
+in the experimental section.</p>
+
+<p>We do not apply any other special preprocessing to the data.
+In particular, we do not binarize the parse trees or handle unaries
+in any specific way. We also treat unknown words in a naive way:
+we map all words beyond our 90K vocabulary to a single UNK token.
+This potentially underestimates our final results, but keeps our
+framework task-independent.</p>
+
+<p>\vspace{-3mm}</p>
+
+<hr>
+
+<h2>3. Experiments</h2>
+
+<span id="sec:exp" class="label-anchor"></span>
+
+### Training Data
+
+<p>We trained the model described above on 2 different datasets.
+For one, we trained on the standard WSJ training dataset.
+This is a very small training set by neural network standards, as it contains
+only 40K sentences (compared to 60K examples even in MNIST).
+Still, even training on this set, we managed to get results that
+match those obtained by domain-specific parsers.</p>
+
+<p>To exceed the previous state-of-the-art, we created another, larger training
+set of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>11M parsed sentences (250M tokens). First, we collected all
+publicly available treebanks.
+We used the OntoNotes corpus version 5~[hovy-EtAl:2006:NAACL],
+the English Web Treebank~[petrov-mcdonald:2012:SANCL] and the updated
+and corrected Question Treebank~[judge-etAl:2006:ACL].
+Note that the popular Wall Street Journal section of the Penn
+Treebank~[marcus:1993:CL] is part of the OntoNotes corpus.
+In total, these corpora give us <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>90K training sentences (we held out
+certain sections for evaluation, as described below).</p>
+
+<p>In addition to this gold standard data, we use a corpus parsed with existing
+parsers using the ``tri-training'' approach of [Li0C14]. In this approach,
+two parsers, our reimplementation of BerkeleyParser~[petrov-EtAl:2006:ACL]
+and a reimplementation of ZPar~[zhu-EtAl:2013:ACL], are used to process
+unlabeled sentences sampled from news appearing on the web. We select only
+sentences for which both parsers produced the same parse tree and re-sample
+to match the distribution of sentence lengths of the WSJ training corpus.
+Re-sampling is useful because parsers agree much more often on short sentences.
+We call the set of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>11 million sentences selected in this way,
+together with the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>90K golden sentences described above,
+the *high-confidence corpus*.</p>
+
+<p>In earlier experiments, we only used one parser, our reimplementation of BerkeleyParser,
+to create a corpus of parsed sentences. In that case we just parsed <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>7 million
+senteces from news appearing on the web and combined these parsed sentences with the
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>90K golden corpus described above. We call this the *BerkeleyParser corpus*.</p>
+
+### Evaluation
+
+<table class="article-table">
+  <caption>F1 scores of various parsers on the development and test set.
+  See text for discussion.</caption>
+  <thead><tr>
+    <th>{\bf Parser}</th>
+    <th>{\bf Training Set}</th>
+    <th>{\bf WSJ 22}</th>
+    <th>{\bf WSJ 23}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>baseline LSTM+D</td>
+    <td>WSJ only</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span> 70</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span> 70</td>
+  </tr>
+  <tr>
+    <td>LSTM+A+D</td>
+    <td>WSJ only</td>
+    <td>88.7</td>
+    <td>88.3</td>
+  </tr>
+  <tr>
+    <td>LSTM+A+D ensemble</td>
+    <td>WSJ only</td>
+    <td>90.7</td>
+    <td>90.5</td>
+  </tr>
+  <tr>
+    <td>baseline LSTM</td>
+    <td>BerkeleyParser corpus</td>
+    <td>91.0</td>
+    <td>90.5</td>
+  </tr>
+  <tr>
+    <td>LSTM+A</td>
+    <td>high-confidence corpus</td>
+    <td>93.3</td>
+    <td>92.5</td>
+  </tr>
+  <tr>
+    <td>LSTM+A ensemble</td>
+    <td>high-confidence corpus</td>
+    <td>{\bf 93.5}</td>
+    <td>{\bf 92.8}</td>
+  </tr>
+  <tr>
+    <td>\specialrule{1pt}{-1pt}{0pt}
+Petrov et al. (2006) [petrov-EtAl:2006:ACL]</td>
+    <td>WSJ only</td>
+    <td>91.1</td>
+    <td>90.4</td>
+  </tr>
+  <tr>
+    <td>Zhu et al. (2013) [zhu-EtAl:2013:ACL]</td>
+    <td>WSJ only</td>
+    <td>N/A</td>
+    <td>90.4</td>
+  </tr>
+  <tr>
+    <td>Petrov et al. (2010) ensemble [petrov:2010:NAACL]</td>
+    <td>WSJ only</td>
+    <td>92.5</td>
+    <td>91.8</td>
+  </tr>
+  <tr>
+    <td>Zhu et al. (2013) [zhu-EtAl:2013:ACL]</td>
+    <td>semi-supervised</td>
+    <td>N/A</td>
+    <td>91.3</td>
+  </tr>
+  <tr>
+    <td>Huang \</td>
+    <td>Harper (2009) [huang-harper:2009:EMNLP]</td>
+    <td>semi-supervised</td>
+    <td>N/A</td>
+    <td>91.3</td>
+  </tr>
+  <tr>
+    <td>McClosky et al. (2006) [mcclosky-etAl:2006:NAACL]</td>
+    <td>semi-supervised</td>
+    <td>92.4</td>
+    <td>92.1</td>
+  </tr>
+  <tr>
+    <td>Huang \</td>
+    <td>Harper (2010) ensemble [huang-etAl:2010:EMNLP]</td>
+    <td>semi-supervised</td>
+    <td>92.8</td>
+    <td>92.4</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>We use the standard EVALB tool for
+evaluation and report F1 scores on our developments set (section 22 of
+the Penn Treebank) and the final test set (section 23) in Table~<a href="#tab:res" class="cross-ref">Table 1</a>.</p>
+
+<p>First, let us remark that our training setup differs from those reported
+in previous works. To the best of our knowledge, no standard parsers have
+ever been trained on datasets numbering in the hundreds of millions of tokens,
+and it would be hard to do due to efficiency problems. We therefore cite
+the semi-supervised results, which are analogous in spirit but use less data.</p>
+
+<p>Table <a href="#tab:res" class="cross-ref">Table 1</a> shows performance of our models on the top and results
+from other papers at the bottom.
+We compare to variants of the BerkeleyParser that use
+self-training on unlabeled data [huang-harper:2009:EMNLP], or built an ensemble
+of multiple parsers [petrov:2010:NAACL], or combine both techniques.
+We also include the best linear-time parser in the literature,
+the transition-based parser of [zhu-EtAl:2013:ACL].</p>
+
+<p>It can be seen that, when training on WSJ only, a baseline LSTM does not
+achieve any reasonable score, even with dropout and early stopping.
+But a single attention model gets to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>88.3</mn></mrow><annotation encoding="application/x-tex">88.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">88.3</span></span></span></span></span> and an ensemble of 5 LSTM+A+D models
+achieves <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>90.5</mn></mrow><annotation encoding="application/x-tex">90.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">90.5</span></span></span></span></span> matching a single-model BerkeleyParser on WSJ 23.
+When trained on the large high-confidence corpus, a single LSTM+A model
+achieves <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>92.5</mn></mrow><annotation encoding="application/x-tex">92.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92.5</span></span></span></span></span> and so outperforms not only the best single model, but also
+the best ensemble result reported previously. An ensemble of 5 LSTM+A models
+further improves this score to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>92.8</mn></mrow><annotation encoding="application/x-tex">92.8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92.8</span></span></span></span></span>.</p>
+
+<p>**Generating well-formed trees..**
+The LSTM+A model trained on WSJ dataset only produced malformed trees
+for 25 of the 1700 sentences in our development set (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.5</mn></mrow><annotation encoding="application/x-tex">1.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.5</span></span></span></span></span>\% of all cases),
+and the model trained on full high-confidence dataset did this for 14
+sentences (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.8</mn></mrow><annotation encoding="application/x-tex">0.8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.8</span></span></span></span></span>\%). In these few cases where LSTM+A outputs a malformed tree,
+we simply add brackets to either the beginning or the end of the tree
+in order to make it balanced. It is worth noting that all 14 cases where
+LSTM+A produced unbalanced trees were sentences or sentence fragments that did not
+end with proper punctuation. There were very few such sentences in the training data,
+so it is not a surprise that our model cannot deal with them very well.</p>
+
+<p>**Score by sentence length..**
+An important concern with the sequence-to-sequence LSTM was that it may not
+be able to handle long sentences well.  We determine the extent of this problem
+by partitioning the development set by length, and evaluating BerkeleyParser,
+a baseline LSTM model without attention, and LSTM+A on sentences of each length.
+The results, presented in Figure~<a href="#fig:len" class="cross-ref">Fig. 3</a>, are surprising. The difference
+between the F1 score on sentences of length upto 30 and that upto 70 is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.3</mn></mrow><annotation encoding="application/x-tex">1.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.3</span></span></span></span></span>
+for the BerkeleyParser, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.7</mn></mrow><annotation encoding="application/x-tex">1.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.7</span></span></span></span></span> for the baseline LSTM, and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.7</mn></mrow><annotation encoding="application/x-tex">0.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.7</span></span></span></span></span> for LSTM+A.
+So already the baseline LSTM has similar performance to the BerkeleyParser,
+it degrades with length only slightly. Surprisingly, LSTM+A shows *less*
+degradation with length than BerkeleyParser -- a full <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>n</mi><mn>3</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n^3)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0641em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> chart parser
+that uses a lot more memory.</p>
+
+<p>**Beam size influence..**
+Our decoder uses a beam of a fixed size to calculate the output sequence of
+labels. We experimented with different settings for the beam size. It turns
+out that it is almost irrelevant. We report report results that use beam size
+10, but using beam size 2 only lowers the F1 score of LSTM+A on the
+development set by <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.2</mn></mrow><annotation encoding="application/x-tex">0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span></span>, and using beam size 1 lowers it by <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.5</mn></mrow><annotation encoding="application/x-tex">0.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.5</span></span></span></span></span>
+(to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>92.8</mn></mrow><annotation encoding="application/x-tex">92.8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92.8</span></span></span></span></span>). Beam sizes above 10 do not give any additional improvements.</p>
+
+<p>**Dropout influence..**
+We only used dropout when training on the small WSJ dataset and its
+influence was significant. A single LSTM+A model only achieved
+an F1 score of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>86.5</mn></mrow><annotation encoding="application/x-tex">86.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">86.5</span></span></span></span></span> on our development set, that is over <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn></mrow><annotation encoding="application/x-tex">2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2</span></span></span></span></span> points
+lower than the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>88.7</mn></mrow><annotation encoding="application/x-tex">88.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">88.7</span></span></span></span></span> of a LSTM+A+D model.</p>
+
+<p>**Pre-training influence..**
+As described in the previous section, we initialized the word-vector
+embedding with pre-trained word vectors obtained from \texttt{word2vec}.
+To test the influence of this initialization, we trained a LSTM+A model
+on the high-confidence corpus, and a LSTM+A+D model on the WSJ corpus,
+starting with randomly initialized word-vector embeddings.
+The F1 score on our development set was <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.4</mn></mrow><annotation encoding="application/x-tex">0.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.4</span></span></span></span></span> lower for the LSTM+A model
+(<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>92.9</mn></mrow><annotation encoding="application/x-tex">92.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">92.9</span></span></span></span></span> vs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>93.3</mn></mrow><annotation encoding="application/x-tex">93.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">93.3</span></span></span></span></span>) and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.3</mn></mrow><annotation encoding="application/x-tex">0.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.3</span></span></span></span></span> lower for the LSTM+A+D model (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>88.4</mn></mrow><annotation encoding="application/x-tex">88.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">88.4</span></span></span></span></span> vs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>88.7</mn></mrow><annotation encoding="application/x-tex">88.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">88.7</span></span></span></span></span>).
+So the effect of pre-training is consistent but small.</p>
+
+<p>**Performance on other datasets..**
+The WSJ evaluation set has been in use for 20 years and is commonly used
+to compare syntactic parsers. But it is not representative for text
+encountered on the web~[petrov-mcdonald:2012:SANCL]. Even though
+our model was trained on a news corpus, we wanted to check how well it
+generalizes to other forms of text. To this end, we evaluated it on two
+additional datasets:
+- [QTB] 1000 held-out sentences from the Question
+  Treebank~[judge-etAl:2006:ACL];
+- [WEB] the first half of each domain from the English Web
+  Treebank~[petrov-mcdonald:2012:SANCL] (8310 sentences).
+LSTM+A trained on the high-confidence corpus (which only includes text from
+news) achieved an F1 score of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>95.7</mn></mrow><annotation encoding="application/x-tex">95.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">95.7</span></span></span></span></span> on QTB and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84.6</mn></mrow><annotation encoding="application/x-tex">84.6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">84.6</span></span></span></span></span> on WEB.
+Our score on WEB is higher both than the best score reported
+in [petrov-mcdonald:2012:SANCL] (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>83.5</mn></mrow><annotation encoding="application/x-tex">83.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">83.5</span></span></span></span></span>) and the best score
+we achieved with an in-house reimplementation of BerkeleyParser trained
+on human-annotated data (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84.4</mn></mrow><annotation encoding="application/x-tex">84.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">84.4</span></span></span></span></span>). We managed to achieve a slightly higher
+score (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>84.8</mn></mrow><annotation encoding="application/x-tex">84.8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">84.8</span></span></span></span></span>) with the in-house BerkeleyParser trained on a large corpus.
+On QTB, the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>95.7</mn></mrow><annotation encoding="application/x-tex">95.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">95.7</span></span></span></span></span> score of LSTM+A is also lower than the best score of
+our in-house BerkeleyParser (<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>96.2</mn></mrow><annotation encoding="application/x-tex">96.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">96.2</span></span></span></span></span>). Still, taking into account that there
+were only few questions in the training data, these scores show that
+LSTM+A managed to generalize well beyond the news language it was trained on.</p>
+
+<p>**Parsing speed..**
+Our LSTM+A model, running on a multi-core CPU using batches of 128 sentences
+on a generic unoptimized decoder, can parse over 120 sentences from WSJ per second
+for sentences of all lengths (using beam-size 1). This is better than the speed
+reported for this batch size in Figure 4 of [hall2014sparser] at 100 sentences
+per second, even though they run on a GPU and only on sentences of under 40 words.
+Note that they achieve <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>89.7</mn></mrow><annotation encoding="application/x-tex">89.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">89.7</span></span></span></span></span> F1 score on this subset of sentences of section 22,
+while our model at beam-size 1 achieves a score of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>93.7</mn></mrow><annotation encoding="application/x-tex">93.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">93.7</span></span></span></span></span> on this subset.</p>
+
+<p>\vspace{-0mm}</p>
+
+<hr>
+
+<h2>4. Analysis</h2>
+
+<span id="sec:analysis" class="label-anchor"></span>
+
+<p>As shown in this paper, the attention mechanism was a key component especially when learning from a relatively small dataset. We found that the model did not overfit and learned the parsing function from scratch much faster, which resulted in a model which generalized much better than the plain LSTM without attention.</p>
+
+<p>One of the most interesting aspects of attention is that it allows us to visualize to interpret what the model has learned from the data. For example, in [bahdanau2014neural] it is shown that for translation, attention learns an alignment function, which certainly should help translating from English to French.</p>
+
+<p>Figure~<a href="#fig:attention" class="cross-ref">Fig. 4</a> shows an example of the attention model trained only on the WSJ dataset. From the attention matrix, where each column is the attention vector over the inputs, it is clear that the model focuses quite sharply on one word as it produces the parse tree. It is also clear that the focus moves from the first word to the last monotonically, and steps to the right deterministically when a word is consumed.</p>
+
+<p>On the bottom of Figure~<a href="#fig:attention" class="cross-ref">Fig. 4</a> we see where the model attends (black arrow), and the current output being decoded in the tree (black circle). This stack procedure is learned from data (as all the parameters are randomly initialized), but is not quite a simple stack decoding. Indeed, at the input side, if the model focuses on position <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>, that state has information for all words after <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span> (since we also reverse the inputs). It is worth noting that, in some examples (not shown here), the model does skip words.</p>
+
+<p>\vspace{-0mm}</p>
+
+<hr>
+
+<h2>5. Related Work</h2>
+
+<span id="sec:rel" class="label-anchor"></span>
+
+<p>The task of syntactic constituency parsing  
+has received a tremendous amount of attention in the last 20 years.
+Traditional approaches to constituency parsing rely on probabilistic
+context-free grammars (CFGs).
+The focus in these approaches is on devising appropriate smoothing
+techniques for highly lexicalized and thus rare 
+events [collins:1997:ACL] or carefully crafting the
+model structure [klein-manning:2003:ACL].
+[petrov-EtAl:2006:ACL] partially alleviate the heavy reliance on
+manual modeling of linguistic structure by using latent variables to learn a
+more articulated model.
+However, their model still depends on a CFG backbone and is thereby potentially
+restricted in its capacity.</p>
+
+<p>Early neural network approaches to parsing, for example by
+[henderson:2003:NAACL][henderson:2004:ACL] also relied on strong linguistic insights.
+[titov-henderson:2007:ACL] introduced Incremental Sigmoid Belief Networks for syntactic parsing.
+By constructing the model structure incrementally, they are able to avoid 
+making strong independence assumptions but inference becomes intractable.
+To avoid complex inference methods, 
+[collobert2011deep] propose a recurrent neural network
+where parse trees are decomposed into a stack of independent levels.
+Unfortunately, this decomposition breaks for long sentences and
+their accuracy on longer sentences falls quite significantly behind
+the state-of-the-art.
+[socher2011parsing] used a tree-structured neural network to score candidate parse trees.
+Their model however relies again on the CFG assumption and
+furthermore can only be used to score candidate trees rather than for full inference.</p>
+
+<p>Our LSTM model significantly differs from all these models, as it makes no assumptions about
+the task. As a sequence-to-sequence prediction model it is somewhat
+related to the incremental parsing models, pioneered by [ratnaparkhi]
+and extended by [collins-roark:2004:ACL].
+Such linear time parsers however typically need some task-specific constraints
+and might build up the parse in multiple passes. Relatedly, [zhu-EtAl:2013:ACL]
+present excellent parsing results with a single left-to-right pass, but require a stack
+to explicitly delay making decisions and a parsing-specific transition strategy in order
+to achieve good parsing accuracies.
+The LSTM in contrast uses its short term memory to model the complex underlying structure
+that connects the input-output pairs.</p>
+
+<p>Recently, researchers have developed a number of neural network models that
+can be applied to general sequence-to-sequence problems.
+[graves2013generating] was the first to propose a differentiable attention
+mechanism for the general problem of handwritten text synthesis, although his
+approach assumed a monotonic alignment between the input and output sequences.
+Later, [bahdanau2014neural]
+introduced a more general attention model that does not assume a monotonic
+alignment, and applied it to machine translation, and
+[chorowski2014end] applied the same model to speech
+recognition.  [kalchbrenner2013recurrent] used a convolutional
+neural network to encode a variable-sized input sentence into
+a vector of a fixed dimension and used a RNN to produce the output sentence.
+Essentially the same model has been used by [vinyals2014show] to
+successfully learn to generate image captions.
+Finally, already in 1990 [zoubin] experimented with
+applying recurrent neural networks to the problem of syntactic parsing.</p>
+
+<p>\vspace{-0mm}</p>
+
+<hr>
+
+<h2>6. Conclusions</h2>
+
+<span id="sec:concl" class="label-anchor"></span>
+
+<p>In this work, we have shown that generic sequence-to-sequence
+approaches can achieve excellent results on syntactic constituency
+parsing with relatively little effort or tuning.  In addition, while
+we found the model of Sutskever et al.~[sutskever14] to not be
+particularly data efficient, the attention model of Bahdanau et
+al.~[bahdanau2014neural] was found to be highly data efficient,
+as it has matched the performance of the BerkeleyParser when trained
+on a small human-annotated parsing dataset.  Finally, we showed that
+synthetic datasets with imperfect labels can be highly useful, as our
+models have substantially outperformed the models that have been used
+to create their training data.  We suspect it is the case due to the
+different natures of the teacher model and the student model: the
+student model has likely viewed the teacher's errors as noise which it
+has been able to ignore.  This approach was so successful that we
+obtained a new state-of-the-art result in syntactic constituency
+parsing with a single attention model, which also means that the model
+is exceedingly fast.  This work shows that domain independent models
+with excellent learning algorithms can match and even outperform
+domain specific models.</p>
+
+<p>\vspace{-0mm}</p>
+
+<p>{\bf Acknowledgement.} We would like to thank Amin Ahmad, Dan Bikel and Jonni Kanerva.</p>
+
+<p>\vspace{-3mm}
+\bibliographystyle{unsrt}
+\bibliography{nips2015}</p>
+
+<hr>
+
+<h2>References</h2>
+<ol class="references">
+</ol>

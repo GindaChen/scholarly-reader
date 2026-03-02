@@ -1,0 +1,28 @@
+title: Logic Blog 2016
+short_title: Logic Blog 2016
+type: journal-article
+authors:
+  - given: 'Editor: Andr\''e'
+    family: Nies
+date: '2026-03-02'
+url: https://arxiv.org/abs/1703.01573
+pdf: https://arxiv.org/pdf/1703.01573
+arxiv_id: '1703.01573'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1703.01573
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: ''
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 42
+reference_count: 44
+sections: 22
+figures: 1

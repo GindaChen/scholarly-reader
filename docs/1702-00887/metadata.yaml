@@ -1,0 +1,34 @@
+title: Structured Attention Networks
+short_title: Structured Attention Networks
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1702.00887
+pdf: https://arxiv.org/pdf/1702.00887
+arxiv_id: '1702.00887'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1702.00887
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Attention networks have proven to be an effective approach for
+    embedding categorical inference within a deep neural network.
+    However, for many tasks we may want to model richer structural
+    dependencies without abandoning end-to-end training. In this work,
+    we experiment with incorporating richer structural distributions,
+    encoded using graphical models, within deep networks. We
+    show that these structured attention networks are simple extensions
+    of the basic attention procedure, and th
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 33
+reference_count: 0
+sections: 8
+figures: 7

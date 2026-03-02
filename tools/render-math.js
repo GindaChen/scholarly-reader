@@ -40,16 +40,20 @@ function renderMath(latex, displayMode = false) {
     try {
         // Clean common LaTeX issues
         let clean = latex.trim();
+        // Strip HTML tags that may have leaked in (e.g. label-anchor spans)
+        clean = clean.replace(/<[^>]+>/g, '');
         clean = clean.replace(/\\label\{[^}]*\}/g, '');
         clean = clean.replace(/\\tag\{[^}]*\}/g, '');
         clean = clean.replace(/\\nonumber/g, '');
+        // Unescape any HTML entities in math content
+        clean = clean.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 
         return katex.renderToString(clean, {
             displayMode,
             throwOnError: false,
             trust: true,
             strict: false,
-            macros: {
+            macros: Object.assign({
                 '\\R': '\\mathbb{R}',
                 '\\N': '\\mathbb{N}',
                 '\\Z': '\\mathbb{Z}',
@@ -60,7 +64,7 @@ function renderMath(latex, displayMode = false) {
                 '\\LayerNorm': '\\text{LayerNorm}',
                 '\\Concat': '\\text{Concat}',
                 '\\head': '\\text{head}',
-            },
+            }, _customMacros),
         });
     } catch (e) {
         // Return raw LaTeX in a styled span on failure
@@ -153,4 +157,48 @@ function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-module.exports = { renderMath, renderAllMath, annotateVarsInMath };
+
+/**
+ * Extract \newcommand and \def macros from TeX preamble for use in KaTeX
+ */
+function extractKatexMacros(tex) {
+    const macros = {};
+    // \newcommand{\name}[n]{def} and \newcommand{\name}{def}
+    const newcmd = /\\(?:newcommand|renewcommand)\{\\([a-zA-Z]+)\}(?:\[\d+\])?\{([^}]*)\}/g;
+    let m;
+    while ((m = newcmd.exec(tex)) !== null) {
+        let def = m[2]
+            .replace(/\\mbox\{\\boldmath\{\$([^$]*)\$\}\}/g, '\\boldsymbol{$1}')
+            .replace(/\\mbox\{\\boldmath\{([^}]*)\}\}/g, '\\boldsymbol{$1}')
+            .replace(/\\ensuremath\{([^}]*)\}/g, '$1')
+            .replace(/\\mbox\{([^}]*)\}/g, '\\text{$1}')
+            .replace(/\$/g, '');
+        macros['\\' + m[1]] = def;
+    }
+    // \def\name{def} — handle nested braces
+    const defRe = /\\def\\([a-zA-Z]+)/g;
+    while ((m = defRe.exec(tex)) !== null) {
+        const name = m[1];
+        // Find the balanced brace content starting after \def\name
+        let pos = m.index + m[0].length;
+        while (pos < tex.length && tex[pos] !== '{') pos++;
+        if (pos >= tex.length) continue;
+        let depth = 0, start = pos, end = pos;
+        for (let i = pos; i < tex.length; i++) {
+            if (tex[i] === '{') depth++;
+            else if (tex[i] === '}') { depth--; if (depth === 0) { end = i; break; } }
+        }
+        let defVal = tex.substring(start + 1, end);
+        defVal = defVal
+            .replace(/\\boldsymbol\{\\mathbf\{#1\}\}/g, '\\boldsymbol{#1}')
+            .replace(/\\vec\{([^}]*)\}/g, '\\boldsymbol{$1}');
+        macros['\\' + name] = defVal;
+    }
+    return macros;
+}
+
+let _customMacros = {};
+function setCustomMacros(m) { _customMacros = m || {}; }
+function getCustomMacros() { return _customMacros; }
+
+module.exports = { renderMath, renderAllMath, annotateVarsInMath, extractKatexMacros, setCustomMacros };

@@ -1,0 +1,45 @@
+title: Deep Recurrent Models with Fast-Forward Connections for Neural Machine Translation
+short_title: Deep Recurrent Models with Fast-Forward …
+type: journal-article
+authors:
+  - given: >-
+      Jie Zhou \ Ying Cao \ Xuguang Wang \ Peng Li \ Wei Xu Baidu Research - Institute of Deep
+      Learning Baidu
+    family: Inc.
+  - given: ''
+    family: Beijing
+  - given: ''
+    family: caoying03
+  - given: ''
+    family: wangxuguang
+  - given: ''
+    family: lipeng17
+  - given: ''
+    family: wei.xu\
+date: '2026-03-02'
+url: https://arxiv.org/abs/1606.04199
+pdf: https://arxiv.org/pdf/1606.04199
+arxiv_id: '1606.04199'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1606.04199
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  Neural machine translation (NMT) aims at solving machine translation (MT) \mbox{problems} using
+  neural networks and has exhibited
+    promising results in recent years.  \mbox{However}, most of the existing NMT models are shallow and there is still a performance gap
+    between a \mbox{single} NMT model and the best \mbox{conventional} MT system.   In this work, we introduce a new type of linear
+    connections, named fast-forward connections, based on deep Long Short-Term Memory (\mbox{LSTM}) network
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 15
+reference_count: 31
+sections: 6
+figures: 4

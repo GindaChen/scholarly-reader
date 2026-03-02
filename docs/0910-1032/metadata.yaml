@@ -1,0 +1,26 @@
+title: 'Flavour Theory: 2009'
+short_title: 'Flavour Theory: 2009'
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/0910.1032
+pdf: https://arxiv.org/pdf/0910.1032
+arxiv_id: '0910.1032'
+archive: arxiv
+archive_url: https://arxiv.org/abs/0910.1032
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: ''
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 16
+reference_count: 302
+sections: 5
+figures: 11

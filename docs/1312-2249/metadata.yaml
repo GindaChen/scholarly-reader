@@ -1,0 +1,39 @@
+title: Scalable Object Detection using Deep Neural Networks
+short_title: Scalable Object Detection using Deep Neu…
+type: journal-article
+authors:
+  - given: ''
+    family: szegedy
+  - given: ''
+    family: toshev
+  - given: ''
+    family: dragomir\
+date: '2026-03-02'
+url: https://arxiv.org/abs/1312.2249
+pdf: https://arxiv.org/pdf/1312.2249
+arxiv_id: '1312.2249'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1312.2249
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Deep convolutional neural networks have recently achieved
+    state-of-the-art performance on a number of image recognition benchmarks,
+    including the ImageNet Large-Scale Visual Recognition Challenge
+    (ILSVRC-2012).  The winning model on the localization sub-task was a network
+    that predicts a single bounding box and a confidence score for each object
+    category in the image. Such a model captures the whole-image context around
+    the objects but cannot handle multiple instances of the same obj
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 3
+reference_count: 0
+sections: 5
+figures: 5

@@ -1,0 +1,1679 @@
+<h1>End-To-End Memory Networks</h1>
+
+<p class="authors">Sainbayar Sukhbaatar Dept. of Computer Science Courant Institute</p>
+
+<h2>Abstract</h2>
+<p>We introduce a neural network with a recurrent attention model over a possibly
+large external memory.
+The architecture is a form of Memory Network
+\cite{Weston14} but unlike the model in that work, it is trained end-to-end,
+and hence requires significantly less supervision during training, making it more generally
+applicable in realistic settings.
+It can also be seen as an extension of RNNsearch \cite{BahdanauCB14} to the case where
+multiple computational steps (hops) are performed per output symbol.
+The flexibility of the model allows us to apply it to tasks as diverse
+as (synthetic) question answering \cite{Weston15} and to language modeling.
+For the former our approach is competitive with Memory Networks, but with less supervision.
+For the latter, on the Penn TreeBank and Text8 datasets our approach demonstrates
+  comparable performance to RNNs and LSTMs.
+In both cases we show that the key concept of
+multiple computational hops yields improved results.</p>
+
+<hr>
+
+<h2>1. Introduction</h2>
+
+<p>Two grand challenges in artificial intelligence research have been to build
+models that can make multiple computational steps in
+the service of answering a question or completing a task, and models that
+can describe long term dependencies in sequential data.</p>
+
+<p>Recently there has been a resurgence in models of computation using explicit
+storage and a notion of attention
+<sup class="ref-badge" data-ref="23" data-title="">23</sup><sup class="ref-badge" data-ref="8" data-title="">8</sup><sup class="ref-badge" data-ref="2" data-title="">2</sup>; manipulating such a storage offers an approach to both of these challenges.
+In <sup class="ref-badge" data-ref="23" data-title="">23</sup><sup class="ref-badge" data-ref="8" data-title="">8</sup><sup class="ref-badge" data-ref="2" data-title="">2</sup>, the storage is endowed with a
+continuous representation; reads from and writes to the storage, as well as other processing steps, are modeled by the actions of neural networks.</p>
+
+<p>In this work, we present a novel recurrent neural network (RNN)
+ architecture where the recurrence reads from a possibly large external memory
+multiple times before outputting a symbol.
+Our model can be considered a continuous form of the Memory Network implemented in
+<sup class="ref-badge" data-ref="23" data-title="">23</sup>.   The model in that work was not easy to train via backpropagation, and required supervision at each layer of the network.  The continuity of the model we present here
+means that it can be trained end-to-end from input-output pairs, and so
+ is applicable to more tasks,
+i.e. tasks where such supervision is not available, such as in language modeling or
+ realistically supervised question answering tasks.  Our model can also be seen as
+ a version of RNNsearch <sup class="ref-badge" data-ref="2" data-title="">2</sup> with multiple computational steps  (which we term ``hops'')  per output symbol.
+We will show experimentally that the  multiple hops over  the long-term memory are crucial to
+good performance of our model on these tasks, and that training the memory representation can be integrated in a scalable manner into our
+end-to-end neural network model.</p>
+
+<hr>
+
+<h2>2. Approach</h2>
+
+<span id="sec:approach" class="label-anchor"></span>
+
+<p>Our model takes a discrete set of inputs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mo separator="true">,</mo><msub><mi>x</mi><mi>n</mi></msub></mrow><annotation encoding="application/x-tex">x_1, ..., x_n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">...</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">n</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> that are to be
+stored in the memory, a query <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span>, and outputs an answer <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span>.
+Each of the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span>, and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span> contains symbols coming from a dictionary with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span></span> words.
+The model writes all <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span>  to the memory up to a fixed buffer size, and then finds a continuous
+representation for the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span>.  The continuous representation is then processed via multiple hops to output <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span>.  This allows
+backpropagation of the error signal through multiple memory
+accesses back to the input during training.</p>
+
+<h3>Single Layer</h3>
+We start by describing our model in the single layer case, which implements a single memory hop operation. We then show it can be stacked to give multiple hops in memory.
+
+<p>\noindent <strong>Input memory  representation:</strong> Suppose we are given an input
+set <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mo separator="true">,</mo><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_1 ,.., x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">..</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> to be stored in memory.
+The entire set  of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><msub><mi>x</mi><mi>i</mi></msub><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{x_i\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">}</span></span></span></span></span>
+are converted into memory vectors <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><msub><mi>m</mi><mi>i</mi></msub><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{m_i\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">}</span></span></span></span></span> of dimension <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span> computed by embedding each <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> in a continuous space, in the simplest case,
+using an embedding matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></span> (of size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>×</mo><mi>V</mi></mrow><annotation encoding="application/x-tex">d \times V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7778em;vertical-align:-0.0833em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span></span>).
+The query <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span>
+is also embedded (again, in the simplest case via another embedding matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi></mrow><annotation encoding="application/x-tex">B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span></span></span></span></span> with the same dimensions
+as <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></span>) to obtain an internal state <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span>.  In the embedding space, we compute the
+match between <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> and each memory <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">m_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> by taking the
+inner product followed by a softmax:</p>
+
+<div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>p</mi><mi>i</mi></msub><mo>=</mo><mtext>Softmax</mtext><mo stretchy="false">(</mo><msup><mi>u</mi><mi>T</mi></msup><msub><mi>m</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">
+p_i = \text{Softmax}(u^T m_i).</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1413em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Softmax</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord">.</span></span></span></span></span></div>
+
+<p>where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>Softmax</mtext><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mo>=</mo><msup><mi>e</mi><msub><mi>z</mi><mi>i</mi></msub></msup><mi mathvariant="normal">/</mi><msub><mo>∑</mo><mi>j</mi></msub><msup><mi>e</mi><msub><mi>z</mi><mi>j</mi></msub></msup></mrow><annotation encoding="application/x-tex">\text{Softmax}(z_i)=e^{z_i}/\sum_j e^{z_j}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Softmax</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.044em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3281em;"><span style="top:-2.357em;margin-left:-0.044em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span class="mord">/</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6644em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3281em;"><span style="top:-2.357em;margin-left:-0.044em;margin-right:0.0714em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2819em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span>. Defined in this way <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span></span></span></span></span> is a probability vector over the inputs.</p>
+
+<p>\noindent <strong>Output memory representation:</strong> Each <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> has a
+corresponding output vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">c_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> (given in the simplest case by another embedding matrix
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi></mrow><annotation encoding="application/x-tex">C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span></span>).
+ The response vector from the memory <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>o</mi></mrow><annotation encoding="application/x-tex">o</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">o</span></span></span></span></span> is then a sum over the transformed inputs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">c_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, weighted by the probability vector from the input:</p>
+
+<div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>o</mi><mo>=</mo><munder><mo>∑</mo><mi>i</mi></munder><msub><mi>p</mi><mi>i</mi></msub><msub><mi>c</mi><mi>i</mi></msub><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">o = \sum_i p_i c_i.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">o</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:2.3277em;vertical-align:-1.2777em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.8723em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.2777em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">.</span></span></span></span></span></div>
+
+<p>Because the function from input to output is
+smooth, we can easily compute gradients and back-propagate through
+it.
+Other recently proposed forms of memory or attention take this
+approach, notably Bahdanau \etal <sup class="ref-badge" data-ref="2" data-title="">2</sup> and Graves \etal <sup class="ref-badge" data-ref="8" data-title="">8</sup>, see also <sup class="ref-badge" data-ref="9" data-title="">9</sup>.</p>
+
+<p>\noindent <strong>Generating the final prediction:</strong>
+In the single layer case, the sum of the output vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>o</mi></mrow><annotation encoding="application/x-tex">o</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">o</span></span></span></span></span> and the input embedding <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> is then passed through a final weight matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi></mrow><annotation encoding="application/x-tex">W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></span></span> (of size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mo>×</mo><mi>d</mi></mrow><annotation encoding="application/x-tex">V \times d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7667em;vertical-align:-0.0833em;"></span><span class="var" data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span>) and a softmax to produce the predicted label:</p>
+
+<div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mover accent="true"><mi>a</mi><mo>^</mo></mover><mo>=</mo><mtext>Softmax</mtext><mo stretchy="false">(</mo><mi>W</mi><mo stretchy="false">(</mo><mi>o</mi><mo>+</mo><mi>u</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\hat{a} = \text{Softmax}(W (o + u))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">a</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Softmax</span></span><span class="mopen">(</span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="mopen">(</span><span class="mord mathnormal">o</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">u</span><span class="mclose">))</span></span></span></span></span></div>
+
+<p>The overall model is shown in \fig{single}(a). During training, all three
+embedding matrices <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></span>, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi></mrow><annotation encoding="application/x-tex">B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi></mrow><annotation encoding="application/x-tex">C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span></span>, as well as <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi></mrow><annotation encoding="application/x-tex">W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></span></span> are jointly
+learned by minimizing a standard cross-entropy loss between <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>a</mi><mo>^</mo></mover></mrow><annotation encoding="application/x-tex">\hat{a}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">a</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span></span></span></span></span>
+and the true label <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span>. Training is performed using stochastic
+gradient descent (see \secc{training} for more details).</p>
+
+<h3>Multiple Layers</h3>
+<span id="sec:multi" class="label-anchor"></span>
+We now extend our model to handle <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="K" data-desc="Key matrix — packed keys (shape: seq_len × d_k)" style="--var-color: #58a6ff"><span class="mord mathnormal" style="margin-right:0.07153em;">K</span></span></span></span></span></span> hop
+operations. The memory layers are stacked in the following way:
+- The input to layers above the first is the sum of the output <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>o</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">o^k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span> and the input <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>u</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">u^{k}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span></span> from layer <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span></span> (different ways to combine <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>o</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">o^k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>u</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">u^{k}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span></span> are proposed later):
+
+<div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msup><mi>u</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msup><mo>=</mo><msup><mi>u</mi><mi>k</mi></msup><mo>+</mo><msup><mi>o</mi><mi>k</mi></msup><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex"> u^{k+1} = u^k + o^k.</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8991em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9824em;vertical-align:-0.0833em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8991em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span><span class="mord">.</span></span></span></span></span></div>
+
+- Each layer has its own embedding matrices <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>A</mi><mi>k</mi></msup><mo separator="true">,</mo><msup><mi>C</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">A^k,C^k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0435em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span>, used to
+  embed the inputs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><msub><mi>x</mi><mi>i</mi></msub><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{x_i\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">}</span></span></span></span></span>. However, as discussed below,
+  they are constrained to ease training and reduce the number of parameters.
+- At the top of the network, the input to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi></mrow><annotation encoding="application/x-tex">W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></span></span> also combines the input and the output of the top memory layer: <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>a</mi><mo>^</mo></mover><mo>=</mo><mtext>Softmax</mtext><mo stretchy="false">(</mo><mi>W</mi><msup><mi>u</mi><mrow><mi>K</mi><mo>+</mo><mn>1</mn></mrow></msup><mo stretchy="false">)</mo><mo>=</mo><mtext>Softmax</mtext><mo stretchy="false">(</mo><mi>W</mi><mo stretchy="false">(</mo><msup><mi>o</mi><mi>K</mi></msup><mo>+</mo><msup><mi>u</mi><mi>K</mi></msup><mo stretchy="false">)</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\hat{a} = \text{Softmax}(W u^{K+1}) = \text{Softmax}(W(o^K + u^K))</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6944em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal">a</span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0913em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Softmax</span></span><span class="mopen">(</span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0913em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">Softmax</span></span><span class="mopen">(</span><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1.0913em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span></span></span></span><span class="mclose">))</span></span></span></span></span>.
+
+<p>We explore two types of weight tying within the model:
+1. <strong>Adjacent:</strong> the output embedding for one layer is the input
+  embedding for the one above, i.e. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>A</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msup><mo>=</mo><msup><mi>C</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">A^{k+1}=C^k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span>. We also constrain (a) the answer prediction matrix to be
+the same as the final output embedding, i.e <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>W</mi><mi>T</mi></msup><mo>=</mo><msup><mi>C</mi><mi>K</mi></msup></mrow><annotation encoding="application/x-tex">W^T=C^K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8413em;"></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8413em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span></span></span></span></span></span></span></span>, and (b) the
+question embedding to match the input embedding of the first layer, i.e. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi><mo>=</mo><msup><mi>A</mi><mn>1</mn></msup></mrow><annotation encoding="application/x-tex">B=A^1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span>.
+2. <strong>Layer-wise (RNN-like):</strong> the input and output embeddings are the same
+  across different layers, i.e. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>A</mi><mn>1</mn></msup><mo>=</mo><msup><mi>A</mi><mn>2</mn></msup><mo>=</mo><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mo>=</mo><msup><mi>A</mi><mi>K</mi></msup></mrow><annotation encoding="application/x-tex">A^1=A^2=...=A^K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mord">...</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8413em;"></span><span class="mord"><span class="mord mathnormal">A</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>C</mi><mn>1</mn></msup><mo>=</mo><msup><mi>C</mi><mn>2</mn></msup><mo>=</mo><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mo>=</mo><msup><mi>C</mi><mi>K</mi></msup></mrow><annotation encoding="application/x-tex">C^1=C^2=...=C^K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mord">...</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8413em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span></span></span></span></span></span></span></span>. We have found it useful to add a linear mapping <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi></mrow><annotation encoding="application/x-tex">H</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.08125em;">H</span></span></span></span></span> to the update of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> between
+hops; that is, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>u</mi><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow></msup><mo>=</mo><mi>H</mi><msup><mi>u</mi><mi>k</mi></msup><mo>+</mo><msup><mi>o</mi><mi>k</mi></msup></mrow><annotation encoding="application/x-tex">u^{k+1} = Hu^k + o^k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.9324em;vertical-align:-0.0833em;"></span><span class="mord mathnormal" style="margin-right:0.08125em;">H</span><span class="mord"><span class="mord mathnormal">u</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8491em;"></span><span class="mord"><span class="mord mathnormal">o</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span>. This mapping is learnt along with the rest of the parameters and used throughout our experiments for layer-wise weight tying.
+A three-layer version of our memory model is shown in
+\fig{single}(b). Overall, it is similar to the Memory Network model in <sup class="ref-badge" data-ref="23" data-title="">23</sup>, except that the hard max operations within each layer have
+been replaced with a continuous weighting from the
+softmax.</p>
+
+<p>Note that if we use the layer-wise weight tying scheme, our model can
+be cast as a traditional RNN where we divide the outputs of the RNN
+into <em>internal</em> and <em>external</em> outputs. Emitting an internal
+output corresponds to considering a memory,
+and emitting an external output corresponds to predicting a label.
+From the RNN point of view, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> in \fig{single}(b) and
+\eqn{recurrent} is a hidden state, and the model generates an
+internal output <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span></span></span></span></span> (attention weights in \fig{single}(a)) using <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></span>.   The model then
+ingests <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span></span></span></span></span> using <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi></mrow><annotation encoding="application/x-tex">C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span></span>, updates the hidden state, and so on is flipped - when viewed as a traditional RNN with this
+ special conditioning of outputs, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></span> becomes part of the output embedding of
+the RNN and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi></mrow><annotation encoding="application/x-tex">C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span></span> becomes the input embedding.}.  Here, unlike a standard RNN, we
+explicitly condition on the outputs stored in memory during the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="K" data-desc="Key matrix — packed keys (shape: seq_len × d_k)" style="--var-color: #58a6ff"><span class="mord mathnormal" style="margin-right:0.07153em;">K</span></span></span></span></span></span> hops, and we keep these
+outputs soft, rather than sampling them.  Thus our model
+makes several computational
+steps before producing an output meant to be seen by the ``outside
+world''.</p>
+
+<hr>
+
+<h2>3. Related Work</h2>
+
+<p>A number of recent efforts have explored ways to capture long-term
+structure within sequences using RNNs or LSTM-based models
+<sup class="ref-badge" data-ref="4" data-title="">4</sup><sup class="ref-badge" data-ref="7" data-title="">7</sup><sup class="ref-badge" data-ref="12" data-title="">12</sup><sup class="ref-badge" data-ref="15" data-title="">15</sup><sup class="ref-badge" data-ref="10" data-title="">10</sup><sup class="ref-badge" data-ref="1" data-title="">1</sup>.  The memory in
+these models is the state of the network, which is latent and
+inherently unstable over long timescales.  The LSTM-based models
+address this through local memory cells which lock in the network
+state from the past. In practice, the performance gains over carefully
+trained RNNs are modest (see Mikolov \etal <sup class="ref-badge" data-ref="15" data-title="">15</sup>). Our model differs from these
+in that it uses a global memory, with shared read and write
+functions. However, with layer-wise weight tying our model can be
+viewed as a form of RNN which only produces an output after a fixed number of
+time steps (corresponding to the number of hops), with the
+intermediary steps involving memory input/output operations that
+update the internal state.</p>
+
+<p>Some of the very early work on neural networks by
+Steinbuch and Piske<sup class="ref-badge" data-ref="19" data-title="">19</sup> and Taylor <sup class="ref-badge" data-ref="21" data-title="">21</sup> considered a memory that performed
+nearest-neighbor operations on stored input vectors and then fit
+parametric models to the retrieved sets. This has similarities to a
+single layer version of our model.</p>
+
+<p>Subsequent work in the 1990's explored other types of memory
+<sup class="ref-badge" data-ref="18" data-title="">18</sup><sup class="ref-badge" data-ref="5" data-title="">5</sup><sup class="ref-badge" data-ref="16" data-title="">16</sup>. For example, Das \etal
+<sup class="ref-badge" data-ref="5" data-title="">5</sup> and Mozer \etal <sup class="ref-badge" data-ref="16" data-title="">16</sup> introduced an explicit stack with
+push and pop operations which has been revisited recently by <sup class="ref-badge" data-ref="11" data-title="">11</sup> in the context of an RNN model.</p>
+
+<p>Closely related to our model is the Neural Turing Machine of
+Graves \etal <sup class="ref-badge" data-ref="8" data-title="">8</sup>, which also uses a continuous memory representation. The NTM memory uses both content and address-based access,
+unlike ours which only explicitly allows the former, although the
+temporal features that we will introduce in \secc{model_details_QA} allow a kind of address-based access.  However, in
+part because we always write each memory sequentially, our model is
+somewhat simpler, not requiring operations like
+sharpening. Furthermore, we apply our memory model to textual
+reasoning tasks, which qualitatively differ from the more abstract
+operations of sorting and recall tackled by the NTM.</p>
+
+<p>Our model is also related to Bahdanau \etal <sup class="ref-badge" data-ref="2" data-title="">2</sup>.  In that
+work, a bidirectional RNN based encoder and gated RNN based decoder were used for
+machine translation. The decoder uses an attention model that finds
+which hidden states from the encoding are most useful for outputting
+the next translated word; the attention model uses a small neural
+network that takes as input a concatenation of the current hidden state of the
+decoder and each of the encoders hidden states. A similar attention model
+is also used in Xu \etal <sup class="ref-badge" data-ref="24" data-title="">24</sup> for generating image captions.
+Our ``memory'' is analogous to their attention mechanism, although <sup class="ref-badge" data-ref="2" data-title="">2</sup> is only over a single
+sentence rather than many, as in our case. Furthermore, our model makes
+several hops on the memory before making an output; we will see below that this is important for
+good performance.  There are also
+differences in the architecture of the small network used to score
+the memories compared to our scoring approach; we use a simple linear layer, whereas they
+use a more sophisticated gated architecture.</p>
+
+<p>We will apply our model to language modeling, an extensively studied
+task. Goodman <sup class="ref-badge" data-ref="6" data-title="">6</sup> showed simple but effective approaches which
+combine <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-grams with a cache. Bengio \etal <sup class="ref-badge" data-ref="3" data-title="">3</sup> ignited
+interest in using neural network based models for the task, with RNNs
+<sup class="ref-badge" data-ref="14" data-title="">14</sup> and LSTMs <sup class="ref-badge" data-ref="10" data-title="">10</sup><sup class="ref-badge" data-ref="20" data-title="">20</sup>
+showing clear performance gains over traditional methods. Indeed,
+the current state-of-the-art is held by variants of these models,
+for example very large LSTMs with Dropout <sup class="ref-badge" data-ref="25" data-title="">25</sup> or
+RNNs with diagonal constraints on the weight matrix <sup class="ref-badge" data-ref="15" data-title="">15</sup>.  With
+appropriate weight tying, our model can be regarded as a modified form
+of RNN, where the recurrence is indexed by memory lookups to the word sequence rather than indexed by the sequence itself.</p>
+
+<hr>
+
+<h2>4. Synthetic Question and Answering  Experiments</h2>
+
+<p>We perform experiments on the synthetic QA tasks defined in
+<sup class="ref-badge" data-ref="22" data-title="">22</sup> (using version 1.1 of the dataset). A given QA task consists of a set of
+statements, followed by a question whose answer is typically a single
+word (in a few tasks, answers are a set of words).
+The answer is available to the model at training time,
+but must be predicted at test time.
+There are a total of 20 different types of tasks that probe
+different forms of reasoning and deduction.
+Here are samples of three of the tasks:
+\vspace{-1mm}
+<table class="article-table">
+  <thead><tr>
+    <th>}
+<code>Sam walks into the kitchen.</code></th>
+    <th><code>Brian is a lion.</code></th>
+    <th><code>Mary journeyed to the den.</code></th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td><code>Sam picks up an apple.</code></td>
+    <td><code>Julius is a lion.</code></td>
+    <td><code>Mary went back to the kitchen.</code></td>
+  </tr>
+  <tr>
+    <td><code>Sam walks into the bedroom.</code></td>
+    <td><code>Julius is white.</code></td>
+    <td><code>John journeyed to the bedroom.</code></td>
+  </tr>
+  <tr>
+    <td><code>Sam drops the apple.</code></td>
+    <td><code>Bernhard is green.</code></td>
+    <td><code>Mary discarded the milk.</code></td>
+  </tr>
+  <tr>
+    <td><code>\textcolor{blue</code>{Q: Where is the apple?}}</td>
+    <td><code>\textcolor{blue</code>{Q: What color is Brian?}}</td>
+    <td><code>\textcolor{blue</code>{Q: Where was the milk before the den?}}</td>
+  </tr>
+  <tr>
+    <td><code>\textcolor{red</code>{A. Bedroom}}</td>
+    <td><code>\textcolor{red</code>{A. White}}</td>
+    <td><code>\textcolor{red</code>{A. Hallway}}</td>
+  </tr>
+  </tbody>
+</table></p>
+
+<p>\vspace{-2mm}
+Note that for each question, only some subset of the
+statements contain information needed for the answer, and the
+others are essentially irrelevant distractors (e.g. the first sentence in the first
+example). In the Memory Networks of Weston \etal <sup class="ref-badge" data-ref="22" data-title="">22</sup>, this <em>supporting subset</em> was explicitly
+indicated to the model during training and the key difference between that work and this one is that this information is no longer provided. Hence, the model
+must deduce for itself at training and test time which sentences are relevant and which are
+not.</p>
+
+<p>Formally, for one of the 20 QA tasks, we are given example
+problems, each having a set of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi></mrow><annotation encoding="application/x-tex">I</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span></span></span></span></span> sentences <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><msub><mi>x</mi><mi>i</mi></msub><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{x_i\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">}</span></span></span></span></span> where
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mo>≤</mo><mn>320</mn></mrow><annotation encoding="application/x-tex">I \leq 320</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8193em;vertical-align:-0.136em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">320</span></span></span></span></span>; a question sentence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span> and answer <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span>. Let the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.854em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span></span></span></span></span>th word of sentence
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span> be <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">x_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span>, represented by a one-hot vector of length <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span></span> (where the
+vocabulary is of size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi><mo>=</mo><mn>177</mn></mrow><annotation encoding="application/x-tex">V=177</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">177</span></span></span></span></span>, reflecting the simplistic nature of the
+QA language). The same representation is used for the question <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span>
+and answer <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span>.
+Two versions of the data are used, one that has 1000 training problems per
+task and a second larger one with 10,000 per task.</p>
+
+<h3>Model Details</h3>
+<span id="sec:model_details_QA" class="label-anchor"></span>
+
+<p>Unless otherwise stated, all experiments used a <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">K=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="K" data-desc="Key matrix — packed keys (shape: seq_len × d_k)" style="--var-color: #58a6ff"><span class="mord mathnormal" style="margin-right:0.07153em;">K</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span></span> hops model with the adjacent weight
+sharing scheme.  For all tasks that output lists
+(i.e.\ the answers are multiple words), we take each possible
+combination of possible outputs and record them as a separate answer
+vocabulary word.</p>
+
+<p>\noindent <strong>Sentence Representation:</strong> In our experiments we explore two different representations for the
+sentences. The first is the bag-of-words (BoW) representation that takes the sentence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub><mo>=</mo><mo stretchy="false">{</mo><msub><mi>x</mi><mrow><mi>i</mi><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mi>x</mi><mrow><mi>i</mi><mn>2</mn></mrow></msub><mo separator="true">,</mo><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mi mathvariant="normal">.</mi><mo separator="true">,</mo><msub><mi>x</mi><mrow><mi>i</mi><mi>n</mi></mrow></msub><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">x_i = \{x_{i1}, x_{i2},..., x_{in}\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">...</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">in</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">}</span></span></span></span></span>,
+embeds each word and sums the resulting vectors: e.g <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mi>i</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><mi>A</mi><msub><mi>x</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">m_i=\sum_j A x_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">A</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><mi>C</mi><msub><mi>x</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">c_i=\sum_j C x_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span>.   The input vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi></mrow><annotation encoding="application/x-tex">u</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span></span></span></span></span> representing
+the question is also embedded as a bag of words: <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>u</mi><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><mi>B</mi><msub><mi>q</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">u = \sum_j Bq_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span>.
+This has the drawback that it cannot capture the order of the words
+in the sentence, which is important for some tasks.</p>
+
+<p>We therefore propose a second representation that encodes the position
+of words within the sentence. This takes the form: <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mi>i</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><msub><mi>l</mi><mi>j</mi></msub><mo>⋅</mo><mi>A</mi><msub><mi>x</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">m_i = \sum_j
+l_j \cdot A x_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0197em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.9694em;vertical-align:-0.2861em;"></span><span class="mord mathnormal">A</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span>, where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>⋅</mo></mrow><annotation encoding="application/x-tex">\cdot</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4445em;"></span><span class="mord">⋅</span></span></span></span></span> is an element-wise multiplication.
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>l</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">l_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0197em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span> is a column vector with the structure
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>l</mi><mrow><mi>k</mi><mi>j</mi></mrow></msub><mo>=</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>j</mi><mi mathvariant="normal">/</mi><mi>J</mi><mo stretchy="false">)</mo><mo>−</mo><mo stretchy="false">(</mo><mi>k</mi><mi mathvariant="normal">/</mi><mi>d</mi><mo stretchy="false">)</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mn>2</mn><mi>j</mi><mi mathvariant="normal">/</mi><mi>J</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">l_{kj}=(1-j/J)-(k/d)(1-2j/J)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9805em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-left:-0.0197em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord">/</span><span class="mord mathnormal">d</span><span class="mclose">)</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="mclose">)</span></span></span></span></span> (assuming 1-based indexing), with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>J</mi></mrow><annotation encoding="application/x-tex">J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span></span></span></span></span> being the number of words in the
+sentence, and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span></span></span></span></span> is the dimension of the embedding.
+This sentence representation, which we call position encoding (PE), means that the order of the words now
+affects <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">m_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>. The same representation is used for questions, memory inputs and memory outputs.</p>
+
+<p>\noindent <strong>Temporal Encoding:</strong> Many of the QA tasks require some notion of temporal context,
+i.e. in the first example of \secc{approach}, the model needs to understand
+that Sam is in the bedroom after he is in the kitchen. To
+enable our model to address them, we modify the memory vector so that <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mi>i</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><mi>A</mi><msub><mi>x</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>T</mi><mi>A</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">m_i = \sum_j Ax_{ij} + T_A(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">A</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span></span></span>, where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>A</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">T_A(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span></span></span> is the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>th row of a
+special matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>A</mi></msub></mrow><annotation encoding="application/x-tex">T_A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> that encodes temporal information. The output embedding is augmented in
+the same way with a matrix <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>c</mi></msub></mrow><annotation encoding="application/x-tex">T_c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> (e.g. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><mi>C</mi><msub><mi>x</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>+</mo><msub><mi>T</mi><mi>C</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">c_i = \sum_j C x_{ij} + T_C(i)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.1858em;vertical-align:-0.4358em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.162em;"><span style="top:-2.4003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4358em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">ij</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">C</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span></span></span>). Both <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>A</mi></msub></mrow><annotation encoding="application/x-tex">T_A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>C</mi></msub></mrow><annotation encoding="application/x-tex">T_C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">C</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> are
+learned during training. They are also subject to the same sharing
+constraints as <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">A</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>C</mi></mrow><annotation encoding="application/x-tex">C</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">C</span></span></span></span></span>. Note that sentences are indexed in reverse
+order, reflecting their relative distance from the question so that
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">x_1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> is the last sentence of the story.</p>
+
+<strong>Learning time invariance by injecting random noise</strong>:
+we have found it helpful to add ``dummy'' memories to regularize <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>T</mi><mi>A</mi></msub></mrow><annotation encoding="application/x-tex">T_A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.1389em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">A</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>.
+That is, at training time we can randomly add 10\% of empty memories to the stories.
+We refer to this approach as random noise (RN).
+
+<h3>Training Details</h3>
+<span id="sec:training" class="label-anchor"></span>
+
+<p>10\% of the bAbI training set was held-out to form a validation set,
+which was used to select the optimal model architecture and hyperparameters.
+Our models were trained using a learning rate of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mo>=</mo><mn>0.01</mn></mrow><annotation encoding="application/x-tex">\eta=0.01</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">η</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.01</span></span></span></span></span>, with
+anneals every 25 epochs by <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mi mathvariant="normal">/</mi><mn>2</mn></mrow><annotation encoding="application/x-tex">\eta/2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">η</span><span class="mord">/2</span></span></span></span></span> until 100 epochs were reached. No
+momentum or weight decay was used. The weights were initialized
+randomly from a Gaussian distribution with zero mean and
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi><mo>=</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">\sigma=0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">σ</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span></span>. When trained on all tasks simultaneously with
+1k training samples (10k training samples), 60 epochs (20 epochs)
+were used with learning rate anneals of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mi mathvariant="normal">/</mi><mn>2</mn></mrow><annotation encoding="application/x-tex">\eta/2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">η</span><span class="mord">/2</span></span></span></span></span> every 15 epochs (5
+epochs). All training uses a batch size of 32 (but cost is not
+averaged over a batch), and gradients with an <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">ℓ</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">\ell_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">ℓ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> norm larger than 40
+are divided by a scalar to have norm 40.   In some of our experiments, we explored commencing training with the
+softmax in each memory layer removed, making the model entirely
+linear except for the final softmax for answer prediction. When the validation
+loss stopped decreasing, the softmax layers were re-inserted and
+training recommenced. We refer to this as linear start (LS) training.
+In LS training, the initial learning rate is set to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>η</mi><mo>=</mo><mn>0.005</mn></mrow><annotation encoding="application/x-tex">\eta= 0.005</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">η</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.005</span></span></span></span></span>. The capacity of memory is restricted to the most recent 50
+sentences. Since the number of sentences and the number of words per
+sentence varied between problems, a null symbol was used to pad them
+all to a fixed size. The embedding of the null symbol was constrained
+to be zero.</p>
+
+<p>On some tasks, we observed a large variance in the
+performance of our model (i.e. sometimes failing badly, other times
+not, depending on the initialization). To remedy this, we repeated each training
+10 times with different random initializations, and picked the one with the lowest
+ training error.</p>
+
+<h3>Baselines</h3>
+We compare our approach (abbreviated to MemN2N) to a range of alternate models:
+- <strong>MemNN:</strong>
+  The strongly supervised AM+NG+NL Memory Networks
+  approach, proposed in <sup class="ref-badge" data-ref="22" data-title="">22</sup>. This is the best reported approach in that paper.
+ It uses a max operation (rather than softmax) at each layer which is trained directly with supporting facts (strong supervision). It employs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-gram modeling, nonlinear layers and an adaptive number of hops per query.
+- <strong>MemNN-WSH:</strong> A weakly supervised heuristic version of MemNN where the
+  supporting sentence labels are not used in training. Since we are
+  unable to backpropagate through the max operations in each layer,
+  we enforce that the first memory hop should share at least one word with the
+question, and that the second memory hop should share at least one
+word with the first hop and at least one word with the answer. All those memories that
+conform are called valid memories, and the goal during training is to rank them higher
+than invalid memories using the same ranking criteria as during strongly
+supervised training.
+- <strong>LSTM:</strong> A standard LSTM model, trained using question /
+  answer pairs only (i.e. also weakly supervised). For more detail, see <sup class="ref-badge" data-ref="22" data-title="">22</sup>.
+
+<h3>Results</h3>
+We report a variety of design choices: (i) BoW vs Position Encoding (PE)
+sentence representation; (ii) training on all 20 tasks independently vs jointly
+training (joint training used an embedding dimension of
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mn>50</mn></mrow><annotation encoding="application/x-tex">d=50</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">50</span></span></span></span></span>, while independent training used <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mn>20</mn></mrow><annotation encoding="application/x-tex">d=20</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">20</span></span></span></span></span>); (iii) two phase
+training: linear start (LS) where softmaxes are removed initially vs training with softmaxes from the start; (iv) varying memory hops from 1 to 3.
+
+<p>The results across all 20 tasks are given in \tab{1k} for the 1k
+training set, along with the mean performance for 10k training set.}.
+They show a number of interesting points:
+- [leftmargin=0cm,itemindent=.5cm,labelwidth=
+- indent,labelsep=0cm,align=left]
+- The best MemN2N models are reasonably close to the supervised models (e.g. 1k: 6.7\% for MemNN vs 12.6\% for MemN2N with position encoding + linear start + random noise, jointly trained
+and 10k: 3.2\% for MemNN vs 4.2\% for MemN2N with position encoding
++ linear start + random noise + non-linearity we found adding more non-linearity solves tasks 17 and 19, see Appendix~<a href="#app:babi_10k" class="cross-ref">Section 5</a>.},</p>
+
+<p>although the supervised models are still superior.
+\vspace{-0.5mm}
+- All variants of our proposed model comfortably beat the weakly supervised baseline methods.
+\vspace{-0.5mm}
+- The position encoding (PE) representation improves over bag-of-words (BoW), as demonstrated by clear improvements on tasks 4, 5, 15 and 18, where word ordering is particularly important.
+\vspace{-0.5mm}
+- The linear start (LS) to training seems to help avoid local
+  minima. See task 16 in \tab{1k}, where PE alone gets 53.6\% error,
+  while using LS reduces it to 1.6\%.
+\vspace{-0.5mm}
+- Jittering the time index with random empty memories (RN) as described in
+\secc{model_details_QA}
+ gives a small but consistent boost in performance, especially for the smaller 1k training set.
+\vspace{-0.5mm}
+- Joint training on all tasks helps.
+\vspace{-0.5mm}
+- Importantly, more computational hops give improved performance.
+We give examples of the hops performed (via the values of
+eq. (<a href="#eq:p" class="cross-ref">Eq. 1</a>)) over some illustrative examples in
+Fig. <a href="#fig:actbaby" class="cross-ref">Fig. 2</a> and in Appendix~<a href="#app:babi_act" class="cross-ref">Section 6</a>.</p>
+
+<table class="article-table">
+  <caption>Test error rates (\%) on the 20 QA tasks for models using
+    1k training examples (mean test errors for 10k training examples are shown at the bottom). Key: BoW = bag-of-words representation; PE =
+  position encoding representation; LS = linear start training; RN = random injection of time
+index noise;  LW = RNN-style layer-wise weight tying (if not stated, adjacent weight tying is used); joint = joint
+  training on all tasks (as opposed to per-task training).</caption>
+  <thead><tr>
+    <th></th>
+    <th>\multicolumn{3}{c|}{Baseline}</th>
+    <th>\multicolumn{9}{c|}{MemN2N}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td></td>
+    <td>Strongly</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>PE</td>
+    <td>1 hop</td>
+    <td>2 hops</td>
+    <td>3 hops</td>
+    <td>PE</td>
+    <td>PE LS</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Supervised</td>
+    <td>LSTM</td>
+    <td>MemNN</td>
+    <td></td>
+    <td></td>
+    <td>PE</td>
+    <td>LS</td>
+    <td>PE LS</td>
+    <td>PE LS</td>
+    <td>PE LS</td>
+    <td>LS RN</td>
+    <td>LW</td>
+  </tr>
+  <tr>
+    <td>Task</td>
+    <td>MemNN <sup class="ref-badge" data-ref="22" data-title="">22</sup></td>
+    <td><sup class="ref-badge" data-ref="22" data-title="">22</sup></td>
+    <td>WSH</td>
+    <td>BoW</td>
+    <td>PE</td>
+    <td>LS</td>
+    <td>RN</td>
+    <td>joint</td>
+    <td>joint</td>
+    <td>joint</td>
+    <td>joint</td>
+    <td>joint</td>
+  </tr>
+  <tr>
+    <td>1: 1 supporting fact</td>
+    <td>0.0</td>
+    <td>50.0</td>
+    <td>0.1</td>
+    <td>0.6</td>
+    <td>0.1</td>
+    <td>0.2</td>
+    <td>0.0</td>
+    <td>0.8</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>0.0</td>
+    <td>0.1</td>
+  </tr>
+  <tr>
+    <td>2: 2 supporting facts</td>
+    <td>0.0</td>
+    <td>80.0</td>
+    <td>42.8</td>
+    <td>17.6</td>
+    <td>21.6</td>
+    <td>12.8</td>
+    <td>8.3</td>
+    <td>62.0</td>
+    <td>15.6</td>
+    <td>14.0</td>
+    <td>11.4</td>
+    <td>18.8</td>
+  </tr>
+  <tr>
+    <td>3: 3 supporting facts</td>
+    <td>0.0</td>
+    <td>80.0</td>
+    <td>76.4</td>
+    <td>71.0</td>
+    <td>64.2</td>
+    <td>58.8</td>
+    <td>40.3</td>
+    <td>76.9</td>
+    <td>31.6</td>
+    <td>33.1</td>
+    <td>21.9</td>
+    <td>31.7</td>
+  </tr>
+  <tr>
+    <td>4: 2 argument relations</td>
+    <td>0.0</td>
+    <td>39.0</td>
+    <td>40.3</td>
+    <td>32.0</td>
+    <td>3.8</td>
+    <td>11.6</td>
+    <td>2.8</td>
+    <td>22.8</td>
+    <td>2.2</td>
+    <td>5.7</td>
+    <td>13.4</td>
+    <td>17.5</td>
+  </tr>
+  <tr>
+    <td>5: 3 argument relations</td>
+    <td>2.0</td>
+    <td>30.0</td>
+    <td>16.3</td>
+    <td>18.3</td>
+    <td>14.1</td>
+    <td>15.7</td>
+    <td>13.1</td>
+    <td>11.0</td>
+    <td>13.4</td>
+    <td>14.8</td>
+    <td>14.4</td>
+    <td>12.9</td>
+  </tr>
+  <tr>
+    <td>6: yes/no questions</td>
+    <td>0.0</td>
+    <td>52.0</td>
+    <td>51.0</td>
+    <td>8.7</td>
+    <td>7.9</td>
+    <td>8.7</td>
+    <td>7.6</td>
+    <td>7.2</td>
+    <td>2.3</td>
+    <td>3.3</td>
+    <td>2.8</td>
+    <td>2.0</td>
+  </tr>
+  <tr>
+    <td>7: counting</td>
+    <td>15.0</td>
+    <td>51.0</td>
+    <td>36.1</td>
+    <td>23.5</td>
+    <td>21.6</td>
+    <td>20.3</td>
+    <td>17.3</td>
+    <td>15.9</td>
+    <td>25.4</td>
+    <td>17.9</td>
+    <td>18.3</td>
+    <td>10.1</td>
+  </tr>
+  <tr>
+    <td>8: lists/sets</td>
+    <td>9.0</td>
+    <td>55.0</td>
+    <td>37.8</td>
+    <td>11.4</td>
+    <td>12.6</td>
+    <td>12.7</td>
+    <td>10.0</td>
+    <td>13.2</td>
+    <td>11.7</td>
+    <td>10.1</td>
+    <td>9.3</td>
+    <td>6.1</td>
+  </tr>
+  <tr>
+    <td>9: simple negation</td>
+    <td>0.0</td>
+    <td>36.0</td>
+    <td>35.9</td>
+    <td>21.1</td>
+    <td>23.3</td>
+    <td>17.0</td>
+    <td>13.2</td>
+    <td>5.1</td>
+    <td>2.0</td>
+    <td>3.1</td>
+    <td>1.9</td>
+    <td>1.5</td>
+  </tr>
+  <tr>
+    <td>10: indefinite knowledge</td>
+    <td>2.0</td>
+    <td>56.0</td>
+    <td>68.7</td>
+    <td>22.8</td>
+    <td>17.4</td>
+    <td>18.6</td>
+    <td>15.1</td>
+    <td>10.6</td>
+    <td>5.0</td>
+    <td>6.6</td>
+    <td>6.5</td>
+    <td>2.6</td>
+  </tr>
+  <tr>
+    <td>11: basic coreference</td>
+    <td>0.0</td>
+    <td>38.0</td>
+    <td>30.0</td>
+    <td>4.1</td>
+    <td>4.3</td>
+    <td>0.0</td>
+    <td>0.9</td>
+    <td>8.4</td>
+    <td>1.2</td>
+    <td>0.9</td>
+    <td>0.3</td>
+    <td>3.3</td>
+  </tr>
+  <tr>
+    <td>12: conjunction</td>
+    <td>0.0</td>
+    <td>26.0</td>
+    <td>10.1</td>
+    <td>0.3</td>
+    <td>0.3</td>
+    <td>0.1</td>
+    <td>0.2</td>
+    <td>0.4</td>
+    <td>0.0</td>
+    <td>0.3</td>
+    <td>0.1</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>13: compound coreference</td>
+    <td>0.0</td>
+    <td>6.0</td>
+    <td>19.7</td>
+    <td>10.5</td>
+    <td>9.9</td>
+    <td>0.3</td>
+    <td>0.4</td>
+    <td>6.3</td>
+    <td>0.2</td>
+    <td>1.4</td>
+    <td>0.2</td>
+    <td>0.5</td>
+  </tr>
+  <tr>
+    <td>14: time reasoning</td>
+    <td>1.0</td>
+    <td>73.0</td>
+    <td>18.3</td>
+    <td>1.3</td>
+    <td>1.8</td>
+    <td>2.0</td>
+    <td>1.7</td>
+    <td>36.9</td>
+    <td>8.1</td>
+    <td>8.2</td>
+    <td>6.9</td>
+    <td>2.0</td>
+  </tr>
+  <tr>
+    <td>15: basic deduction</td>
+    <td>0.0</td>
+    <td>79.0</td>
+    <td>64.8</td>
+    <td>24.3</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>46.4</td>
+    <td>0.5</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>1.8</td>
+  </tr>
+  <tr>
+    <td>16: basic induction</td>
+    <td>0.0</td>
+    <td>77.0</td>
+    <td>50.5</td>
+    <td>52.0</td>
+    <td>52.1</td>
+    <td>1.6</td>
+    <td>1.3</td>
+    <td>47.4</td>
+    <td>51.3</td>
+    <td>3.5</td>
+    <td>2.7</td>
+    <td>51.0</td>
+  </tr>
+  <tr>
+    <td>17: positional reasoning</td>
+    <td>35.0</td>
+    <td>49.0</td>
+    <td>50.9</td>
+    <td>45.4</td>
+    <td>50.1</td>
+    <td>49.0</td>
+    <td>51.0</td>
+    <td>44.4</td>
+    <td>41.2</td>
+    <td>44.5</td>
+    <td>40.4</td>
+    <td>42.6</td>
+  </tr>
+  <tr>
+    <td>18: size reasoning</td>
+    <td>5.0</td>
+    <td>48.0</td>
+    <td>51.3</td>
+    <td>48.1</td>
+    <td>13.6</td>
+    <td>10.1</td>
+    <td>11.1</td>
+    <td>9.6</td>
+    <td>10.3</td>
+    <td>9.2</td>
+    <td>9.4</td>
+    <td>9.2</td>
+  </tr>
+  <tr>
+    <td>19: path finding</td>
+    <td>64.0</td>
+    <td>92.0</td>
+    <td>100.0</td>
+    <td>89.7</td>
+    <td>87.4</td>
+    <td>85.6</td>
+    <td>82.8</td>
+    <td>90.7</td>
+    <td>89.9</td>
+    <td>90.2</td>
+    <td>88.0</td>
+    <td>90.6</td>
+  </tr>
+  <tr>
+    <td>20: agent's motivation</td>
+    <td>0.0</td>
+    <td>9.0</td>
+    <td>3.6</td>
+    <td>0.1</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.2</td>
+  </tr>
+  <tr>
+    <td>Mean error (\%)</td>
+    <td>6.7</td>
+    <td>51.3</td>
+    <td>40.2</td>
+    <td>25.1</td>
+    <td>20.3</td>
+    <td>16.3</td>
+    <td>13.9</td>
+    <td>25.8</td>
+    <td>15.6</td>
+    <td>13.3</td>
+    <td>12.4</td>
+    <td>15.2</td>
+  </tr>
+  <tr>
+    <td>Failed tasks (err. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo><mn>5</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">&gt; 5\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">5%</span></span></span></span></span>)</td>
+    <td>4</td>
+    <td>20</td>
+    <td>18</td>
+    <td>15</td>
+    <td>13</td>
+    <td>12</td>
+    <td>11</td>
+    <td>17</td>
+    <td>11</td>
+    <td>11</td>
+    <td>11</td>
+    <td>10</td>
+  </tr>
+  <tr>
+    <td>On 10k training data</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+  </tr>
+  <tr>
+    <td>Mean error (\%)</td>
+    <td>3.2</td>
+    <td>36.4</td>
+    <td>39.2</td>
+    <td>15.4</td>
+    <td>9.4</td>
+    <td>7.2</td>
+    <td>6.6</td>
+    <td>24.5</td>
+    <td>10.9</td>
+    <td>7.9</td>
+    <td>7.5</td>
+    <td>11.0</td>
+  </tr>
+  <tr>
+    <td>Failed tasks (err. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo><mn>5</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">&gt; 5\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">5%</span></span></span></span></span>)</td>
+    <td>2</td>
+    <td>16</td>
+    <td>17</td>
+    <td>9</td>
+    <td>6</td>
+    <td>4</td>
+    <td>4</td>
+    <td>16</td>
+    <td>7</td>
+    <td>6</td>
+    <td>6</td>
+    <td>6</td>
+  </tr>
+  </tbody>
+</table>
+
+<table class="article-table">
+  <caption>The perplexity on the test sets of Penn Treebank and Text8 corpora.  Note that increasing the number of memory hops improves
+performance.</caption>
+  <thead><tr>
+    <th></th>
+    <th>\multicolumn{5}{c|}{Penn Treebank}</th>
+    <th>\multicolumn{5}{c|}{Text8}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td></td>
+    <td>\# of</td>
+    <td>\# of</td>
+    <td>memory</td>
+    <td>Valid.</td>
+    <td>Test</td>
+    <td>\# of</td>
+    <td>\# of</td>
+    <td>memory</td>
+    <td>Valid.</td>
+    <td>Test</td>
+  </tr>
+  <tr>
+    <td>Model</td>
+    <td>hidden</td>
+    <td>hops</td>
+    <td>size</td>
+    <td>perp.</td>
+    <td>perp.</td>
+    <td>hidden</td>
+    <td>hops</td>
+    <td>size</td>
+    <td>perp.</td>
+    <td>perp.</td>
+  </tr>
+  <tr>
+    <td>RNN  <sup class="ref-badge" data-ref="15" data-title="">15</sup></td>
+    <td>300</td>
+    <td>-</td>
+    <td>-</td>
+    <td>133</td>
+    <td>129</td>
+    <td>500</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>184</td>
+  </tr>
+  <tr>
+    <td>LSTM <sup class="ref-badge" data-ref="15" data-title="">15</sup></td>
+    <td>100</td>
+    <td>-</td>
+    <td>-</td>
+    <td>120</td>
+    <td>115</td>
+    <td>500</td>
+    <td>-</td>
+    <td>-</td>
+    <td>122</td>
+    <td>154</td>
+  </tr>
+  <tr>
+    <td>SCRN <sup class="ref-badge" data-ref="15" data-title="">15</sup></td>
+    <td>100</td>
+    <td>-</td>
+    <td>-</td>
+    <td>120</td>
+    <td>115</td>
+    <td>500</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>161</td>
+  </tr>
+  <tr>
+    <td>MemN2N</td>
+    <td>150</td>
+    <td>2</td>
+    <td>100</td>
+    <td>128</td>
+    <td>121</td>
+    <td>500</td>
+    <td>2</td>
+    <td>100</td>
+    <td>152</td>
+    <td>187</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>3</td>
+    <td>100</td>
+    <td>129</td>
+    <td>122</td>
+    <td>500</td>
+    <td>3</td>
+    <td>100</td>
+    <td>142</td>
+    <td>178</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>4</td>
+    <td>100</td>
+    <td>127</td>
+    <td>120</td>
+    <td>500</td>
+    <td>4</td>
+    <td>100</td>
+    <td>129</td>
+    <td>162</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>5</td>
+    <td>100</td>
+    <td>127</td>
+    <td>118</td>
+    <td>500</td>
+    <td>5</td>
+    <td>100</td>
+    <td>123</td>
+    <td>154</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>100</td>
+    <td>122</td>
+    <td>115</td>
+    <td>500</td>
+    <td>6</td>
+    <td>100</td>
+    <td>124</td>
+    <td>155</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>7</td>
+    <td>100</td>
+    <td>120</td>
+    <td>114</td>
+    <td>500</td>
+    <td>7</td>
+    <td>100</td>
+    <td>118</td>
+    <td><strong>147</strong></td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>25</td>
+    <td>125</td>
+    <td>118</td>
+    <td>500</td>
+    <td>6</td>
+    <td>25</td>
+    <td>131</td>
+    <td>163</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>50</td>
+    <td>121</td>
+    <td>114</td>
+    <td>500</td>
+    <td>6</td>
+    <td>50</td>
+    <td>132</td>
+    <td>166</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>75</td>
+    <td>122</td>
+    <td>114</td>
+    <td>500</td>
+    <td>6</td>
+    <td>75</td>
+    <td>126</td>
+    <td>158</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>100</td>
+    <td>122</td>
+    <td>115</td>
+    <td>500</td>
+    <td>6</td>
+    <td>100</td>
+    <td>124</td>
+    <td>155</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>125</td>
+    <td>120</td>
+    <td>112</td>
+    <td>500</td>
+    <td>6</td>
+    <td>125</td>
+    <td>125</td>
+    <td>157</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>6</td>
+    <td>150</td>
+    <td>121</td>
+    <td>114</td>
+    <td>500</td>
+    <td>6</td>
+    <td>150</td>
+    <td>123</td>
+    <td>154</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>150</td>
+    <td>7</td>
+    <td>200</td>
+    <td>118</td>
+    <td><strong>111</strong></td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>5. Language Modeling Experiments</h2>
+
+<p>The goal in language modeling is to predict the next word in a
+text sequence given the previous words <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span></span></span></span>. We now explain how our model
+can easily be applied to this task.</p>
+
+<p>We now operate on word level, as opposed to
+the sentence level. Thus the previous <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span></span> words in the sequence (including the current) are
+embedded into memory separately.  Each memory
+cell holds only a single word, so there is no need for the BoW or
+linear mapping representations used in the QA tasks. We employ the temporal embedding approach
+of \secc{model_details_QA}.</p>
+
+<p>Since there is
+no longer any question, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>q</mi></mrow><annotation encoding="application/x-tex">q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span></span></span></span></span> in \fig{single} is fixed to a constant vector 0.1 (without embedding).
+The output softmax predicts which word in the vocabulary (of size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="var" data-var="V" data-desc="Value matrix — packed values (shape: seq_len × d_v)" style="--var-color: #7ee787"><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span></span></span>)
+is next in the sequence. A cross-entropy loss is used to train model
+by backpropagating the error through multiple memory layers, in the
+same manner as the QA tasks. To aid training, we apply ReLU
+operations to half of the units in each layer.
+We use layer-wise (RNN-like) weight sharing, i.e. the query weights of
+each layer are the same; the output weights of each layer are the
+same. As noted in \secc{multi}, this makes our architecture closely
+related to an RNN which is traditionally used for language modeling
+tasks; however here the ``sequence'' over which the network is recurrent is not in the text,
+but in the memory hops. Furthermore,
+the weight tying restricts the number of parameters in the model,
+helping generalization for the deeper models which we find to be
+effective for this task.
+We use two different datasets:</p>
+
+<p>\vspace{-1mm}
+\noindent <strong>Penn Tree Bank</strong> <sup class="ref-badge" data-ref="13" data-title="">13</sup>: This consists of
+929k/73k/82k train/validation/test words, distributed over a
+vocabulary of 10k words. The same preprocessing as
+<sup class="ref-badge" data-ref="25" data-title="">25</sup> was used.</p>
+
+<p>\vspace{-1mm}
+\noindent <strong>Text8</strong> <sup class="ref-badge" data-ref="15" data-title="">15</sup>: This is a a
+pre-processed version of the first 100M million characters, dumped
+from Wikipedia. This is split into 93.3M/5.7M/1M character train/validation/test
+sets. All word occurring less than 5 times are replaced with the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>UNK<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span>
+token, resulting in a vocabulary size of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>44k.</p>
+
+<p>\vspace{-1mm}
+<h3>Training Details</h3>
+\vspace{-2mm}
+ The training procedure we use is the same as the QA tasks, except for the following.
+For each mini-batch update, the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="normal">ℓ</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">\ell_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord">ℓ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> norm of
+the whole gradient of all parameters is measured and if larger than <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mn>50</mn></mrow><annotation encoding="application/x-tex">L=50</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">50</span></span></span></span></span>, then it is scaled down to
+  have norm <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal">L</span></span></span></span></span>. This was crucial for good performance. We use the learning rate annealing schedule from <sup class="ref-badge" data-ref="15" data-title="">15</sup>, namely, if the validation cost has not decreased after one
+  epoch, then the learning rate is scaled down by a factor
+  1.5. Training terminates when the learning rate drops below
+  <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-5}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">5</span></span></span></span></span></span></span></span></span></span></span></span></span>, i.e. after 50 epochs or so.
+Weights are initialized using <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><mn>0.05</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathcal{N}(0,0.05)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathcal" style="margin-right:0.14736em;">N</span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.05</span><span class="mclose">)</span></span></span></span></span> and batch size is set to 128.
+On the Penn tree dataset, we repeat each training 10 times with different random initializations
+and pick the one with smallest validation cost. However, we have done only a single training run on Text8 dataset due to limited time constraints.</p>
+
+<p>\vspace{-1mm}
+<h3>Results</h3>
+\vspace{-2mm}
+\tab{lang} compares our model to RNN, LSTM and Structurally
+Constrained Recurrent Nets (SCRN) <sup class="ref-badge" data-ref="15" data-title="">15</sup> baselines on the two
+benchmark datasets. Note that the baseline architectures were tuned in
+<sup class="ref-badge" data-ref="15" data-title="">15</sup> to give optimal perplexity for more detail.}.
+Our MemN2N approach achieves lower perplexity on  both datasets (111 vs 115 for RNN/SCRN on Penn and 147 vs 154
+for LSTM on Text8).
+Note that MemN2N has <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>1.5x more parameters than RNNs with the same number of hidden units,
+while LSTM has <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>4x more parameters.
+We also vary the number of hops and memory size of our MemN2N, showing
+the contribution of both to performance; note in particular that increasing the number of hops helps. In \fig{avgact}, we show how MemN2N operates
+on memory with multiple hops. It shows the average weight of the activation of each memory position over the test set. We can see that some hops
+concentrate only on recent words, while other hops have more broad attention over all memory locations,
+which is consistent with the idea that succesful language models consist of a smoothed <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-gram model and a cache <sup class="ref-badge" data-ref="15" data-title="">15</sup>.
+Interestingly, it seems that those two types of hops tend to alternate.  Also note that unlike a traditional RNN,
+the cache does not decay exponentially:  it has roughly the same average activation across the entire memory.  This may
+be the source of the observed improvement in language modeling.</p>
+
+<p>\vspace{-2mm}</p>
+
+<hr>
+
+<h2>6. Conclusions and Future Work</h2>
+
+<p>\vspace{-2mm}
+ In this work we showed that a neural network with an explicit memory
+and a recurrent attention mechanism for reading the memory can be
+successfully trained via backpropagation on diverse tasks from
+question answering to language modeling.  Compared to the Memory
+Network implementation of <sup class="ref-badge" data-ref="23" data-title="">23</sup> there is no supervision of
+supporting facts and so our model can be used in a wider range of
+settings.  Our model approaches the same performance of that model,
+and is significantly better than other baselines with the same level
+of supervision.  On language modeling tasks, it slightly outperforms
+tuned RNNs and LSTMs of comparable complexity.  On both tasks we can
+see that increasing the number of memory hops improves performance.</p>
+
+<p>However, there is still much to do.  Our model is still unable to
+exactly match the performance of the memory networks trained with
+strong supervision, and both fail on several of the 1k QA tasks.
+Furthermore, smooth lookups may not scale well to the case where a
+larger memory is required.  For these settings, we plan to explore
+multiscale notions of attention or hashing, as proposed in
+<sup class="ref-badge" data-ref="23" data-title="">23</sup>.</p>
+
+<p>\vspace{-2mm}</p>
+
+<hr>
+
+<h2>7. Acknowledgments</h2>
+
+<p>\vspace{-2mm}
+The authors would like to thank Armand Joulin, Tomas Mikolov, Antoine
+Bordes and Sumit Chopra for useful comments and valuable
+discussions, and also the FAIR Infrastructure
+team for their help and support.</p>
+
+<p>\bibliographystyle{ieee}</p>
+
+<p>\begin{appendices}
+\newpage</p>
+
+<hr>
+
+<h2>8. Results on 10k QA dataset</h2>
+
+<span id="app:babi_10k" class="label-anchor"></span>
+<table class="article-table">
+  <caption>Test error rates (\%) on the 20 bAbI QA tasks for models using
+    10k training examples. Key: BoW = bag-of-words representation; PE =
+  position encoding representation; LS = linear start training; RN = random injection of time
+index noise;  LW = RNN-style layer-wise weight tying (if not stated, adjacent weight tying is used); joint = joint
+  training on all tasks (as opposed to per-task training); <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∗</mo></mrow><annotation encoding="application/x-tex">\ast</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4653em;"></span><span class="mord">∗</span></span></span></span></span> = this is a larger model with non-linearity (embedding dimension is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">d=100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">100</span></span></span></span></span> and ReLU applied to the internal state after each hop. This was inspired by <sup class="ref-badge" data-ref="17" data-title="">17</sup> and crucial for getting better performance on tasks 17 and 19).</caption>
+  <thead><tr>
+    <th></th>
+    <th>\multicolumn{3}{c|}{Baseline}</th>
+    <th>\multicolumn{10}{c|}{MemN2N}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td></td>
+    <td>Strongly</td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td></td>
+    <td>PE</td>
+    <td>PE LS</td>
+    <td>1 hop</td>
+    <td>2 hops</td>
+    <td>3 hops</td>
+    <td>PE</td>
+    <td>PE LS</td>
+  </tr>
+  <tr>
+    <td></td>
+    <td>Supervised</td>
+    <td></td>
+    <td>MemNN</td>
+    <td></td>
+    <td></td>
+    <td>PE</td>
+    <td>LS</td>
+    <td>LW</td>
+    <td>PE LS</td>
+    <td>PE LS</td>
+    <td>PE LS</td>
+    <td>LS RN</td>
+    <td>LW</td>
+  </tr>
+  <tr>
+    <td>Task</td>
+    <td>MemNN</td>
+    <td>LSTM</td>
+    <td>WSH</td>
+    <td>BoW</td>
+    <td>PE</td>
+    <td>LS</td>
+    <td>RN</td>
+    <td>RN<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mo>∗</mo></msup></mrow><annotation encoding="application/x-tex">^\ast</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6887em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.6887em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∗</span></span></span></span></span></span></span></span></span></span></span></span></td>
+    <td>joint</td>
+    <td>joint</td>
+    <td>joint</td>
+    <td>joint</td>
+    <td>joint</td>
+  </tr>
+  <tr>
+    <td>1: 1 supporting fact</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>2: 2 supporting facts</td>
+    <td>0.0</td>
+    <td>81.9</td>
+    <td>39.6</td>
+    <td>0.6</td>
+    <td>0.4</td>
+    <td>0.5</td>
+    <td>0.3</td>
+    <td>0.3</td>
+    <td>62.0</td>
+    <td>1.3</td>
+    <td>2.3</td>
+    <td>1.0</td>
+    <td>0.8</td>
+  </tr>
+  <tr>
+    <td>3: 3 supporting facts</td>
+    <td>0.0</td>
+    <td>83.1</td>
+    <td>79.5</td>
+    <td>17.8</td>
+    <td>12.6</td>
+    <td>15.0</td>
+    <td>9.3</td>
+    <td>2.1</td>
+    <td>80.0</td>
+    <td>15.8</td>
+    <td>14.0</td>
+    <td>6.8</td>
+    <td>18.3</td>
+  </tr>
+  <tr>
+    <td>4: 2 argument relations</td>
+    <td>0.0</td>
+    <td>0.2</td>
+    <td>36.6</td>
+    <td>31.8</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>21.4</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>5: 3 argument relations</td>
+    <td>0.3</td>
+    <td>1.2</td>
+    <td>21.1</td>
+    <td>14.2</td>
+    <td>0.8</td>
+    <td>0.6</td>
+    <td>0.8</td>
+    <td>0.8</td>
+    <td>8.7</td>
+    <td>7.2</td>
+    <td>7.5</td>
+    <td>6.1</td>
+    <td>0.8</td>
+  </tr>
+  <tr>
+    <td>6: yes/no questions</td>
+    <td>0.0</td>
+    <td>51.8</td>
+    <td>49.9</td>
+    <td>0.1</td>
+    <td>0.2</td>
+    <td>0.1</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>6.1</td>
+    <td>0.7</td>
+    <td>0.2</td>
+    <td>0.1</td>
+    <td>0.1</td>
+  </tr>
+  <tr>
+    <td>7: counting</td>
+    <td>3.3</td>
+    <td>24.9</td>
+    <td>35.1</td>
+    <td>10.7</td>
+    <td>5.7</td>
+    <td>3.2</td>
+    <td>3.7</td>
+    <td>2.0</td>
+    <td>14.8</td>
+    <td>10.5</td>
+    <td>6.1</td>
+    <td>6.6</td>
+    <td>8.4</td>
+  </tr>
+  <tr>
+    <td>8: lists/sets</td>
+    <td>1.0</td>
+    <td>34.1</td>
+    <td>42.7</td>
+    <td>1.4</td>
+    <td>2.4</td>
+    <td>2.2</td>
+    <td>0.8</td>
+    <td>0.9</td>
+    <td>8.9</td>
+    <td>4.7</td>
+    <td>4.0</td>
+    <td>2.7</td>
+    <td>1.4</td>
+  </tr>
+  <tr>
+    <td>9: simple negation</td>
+    <td>0.0</td>
+    <td>20.2</td>
+    <td>36.4</td>
+    <td>1.8</td>
+    <td>1.3</td>
+    <td>2.0</td>
+    <td>0.8</td>
+    <td>0.3</td>
+    <td>3.7</td>
+    <td>0.4</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.2</td>
+  </tr>
+  <tr>
+    <td>10: indefinite knowledge</td>
+    <td>0.0</td>
+    <td>30.1</td>
+    <td>76.0</td>
+    <td>1.9</td>
+    <td>1.7</td>
+    <td>3.3</td>
+    <td>2.4</td>
+    <td>0.0</td>
+    <td>10.3</td>
+    <td>0.6</td>
+    <td>0.4</td>
+    <td>0.5</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>11: basic coreference</td>
+    <td>0.0</td>
+    <td>10.3</td>
+    <td>25.3</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>8.3</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.4</td>
+  </tr>
+  <tr>
+    <td>12: conjunction</td>
+    <td>0.0</td>
+    <td>23.4</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>13: compound coreference</td>
+    <td>0.0</td>
+    <td>6.1</td>
+    <td>12.3</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>5.6</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>14: time reasoning</td>
+    <td>0.0</td>
+    <td>81.0</td>
+    <td>8.7</td>
+    <td>0.0</td>
+    <td>0.2</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.1</td>
+    <td>30.9</td>
+    <td>0.2</td>
+    <td>0.2</td>
+    <td>0.0</td>
+    <td>1.7</td>
+  </tr>
+  <tr>
+    <td>15: basic deduction</td>
+    <td>0.0</td>
+    <td>78.7</td>
+    <td>68.8</td>
+    <td>12.5</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>42.6</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.2</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>16: basic induction</td>
+    <td>0.0</td>
+    <td>51.9</td>
+    <td>50.9</td>
+    <td>50.9</td>
+    <td>48.6</td>
+    <td>0.1</td>
+    <td>0.4</td>
+    <td>51.8</td>
+    <td>47.3</td>
+    <td>46.4</td>
+    <td>0.4</td>
+    <td>0.2</td>
+    <td>49.2</td>
+  </tr>
+  <tr>
+    <td>17: positional reasoning</td>
+    <td>24.6</td>
+    <td>50.1</td>
+    <td>51.1</td>
+    <td>47.4</td>
+    <td>40.3</td>
+    <td>41.1</td>
+    <td>40.7</td>
+    <td>18,6</td>
+    <td>40.0</td>
+    <td>39.7</td>
+    <td>41.7</td>
+    <td>41.8</td>
+    <td>40.0</td>
+  </tr>
+  <tr>
+    <td>18: size reasoning</td>
+    <td>2.1</td>
+    <td>6.8</td>
+    <td>45.8</td>
+    <td>41.3</td>
+    <td>7.4</td>
+    <td>8.6</td>
+    <td>6.7</td>
+    <td>5.3</td>
+    <td>9.2</td>
+    <td>10.1</td>
+    <td>8.6</td>
+    <td>8.0</td>
+    <td>8.4</td>
+  </tr>
+  <tr>
+    <td>19: path finding</td>
+    <td>31.9</td>
+    <td>90.3</td>
+    <td>100.0</td>
+    <td>75.4</td>
+    <td>66.6</td>
+    <td>66.7</td>
+    <td>66.5</td>
+    <td>2.3</td>
+    <td>91.0</td>
+    <td>80.8</td>
+    <td>73.3</td>
+    <td>75.7</td>
+    <td>89.5</td>
+  </tr>
+  <tr>
+    <td>20: agent's motivation</td>
+    <td>0.0</td>
+    <td>2.1</td>
+    <td>4.1</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+    <td>0.0</td>
+  </tr>
+  <tr>
+    <td>Mean error (\%)</td>
+    <td>3.2</td>
+    <td>36.4</td>
+    <td>39.2</td>
+    <td>15.4</td>
+    <td>9.4</td>
+    <td>7.2</td>
+    <td>6.6</td>
+    <td>4.2</td>
+    <td>24.5</td>
+    <td>10.9</td>
+    <td>7.9</td>
+    <td>7.5</td>
+    <td>11.0</td>
+  </tr>
+  <tr>
+    <td>Failed tasks (err. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo><mn>5</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">&gt; 5\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8056em;vertical-align:-0.0556em;"></span><span class="mord">5%</span></span></span></span></span>)</td>
+    <td>2</td>
+    <td>16</td>
+    <td>17</td>
+    <td>9</td>
+    <td>6</td>
+    <td>4</td>
+    <td>4</td>
+    <td>3</td>
+    <td>16</td>
+    <td>7</td>
+    <td>6</td>
+    <td>6</td>
+    <td>6</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>\newpage</p>
+
+<hr>
+
+<h2>9. Visualization of attention weights in QA problems</h2>
+
+<span id="app:babi_act" class="label-anchor"></span>
+
+<p>\end{appendices}</p>
+
+<hr>
+
+<h2>References</h2>
+<ol class="bibliography">
+  <li id="ref-1"><strong>C. G. Atkeson and S. Schaal. Memory-based neural networks for robot learning. Neurocomputing, 9:243--269, 1995.</strong> . <em></em></li>
+  <li id="ref-2"><strong>D. Bahdanau, K. Cho, and Y. Bengio. Neural machine translation by jointly learning to align and translate. In International Conference on Learning Representations (ICLR), 2015.</strong> . <em></em></li>
+  <li id="ref-3"><strong>Y. Bengio, R. Ducharme, P. Vincent, and C. Janvin. A neural probabilistic language model. J. Mach. Learn. Res., 3:1137--1155, Mar. 2003.</strong> . <em></em></li>
+  <li id="ref-4"><strong>J. Chung, \cC. G\"ul\ccehre, K. Cho, and Y. Bengio. Empirical evaluation of gated recurrent neural networks on sequence modeling. arXiv preprint: 1412.3555, 2014.</strong> . <em></em></li>
+  <li id="ref-5"><strong>S. Das, C. L. Giles, and G.-Z. Sun. Learning context-free grammars: Capabilities and limitations of a recurrent neural network with an external stack memory. In In Proceedings of The Fourteenth Annual Conference of Cognitive Science Society, 1992.</strong> . <em></em></li>
+  <li id="ref-6"><strong>J. Goodman. A bit of progress in language modeling. CoRR, cs.CL/0108005, 2001.</strong> . <em></em></li>
+  <li id="ref-7"><strong>A. Graves. Generating sequences with recurrent neural networks. arXiv preprint: 1308.0850, 2013.</strong> . <em></em></li>
+  <li id="ref-8"><strong>A. Graves, G. Wayne, and I. Danihelka. Neural turing machines. arXiv preprint: 1410.5401, 2014.</strong> . <em></em></li>
+  <li id="ref-9"><strong>K. Gregor, I. Danihelka, A. Graves, and D. Wierstra. DRAW: A recurrent neural network for image generation. CoRR, abs/1502.04623, 2015.</strong> . <em></em></li>
+  <li id="ref-10"><strong>S. Hochreiter and J. Schmidhuber. Long short-term memory. Neural computation, 9(8):1735--1780, 1997.</strong> . <em></em></li>
+  <li id="ref-11"><strong>A. Joulin and T. Mikolov. Inferring algorithmic patterns with stack-augmented recurrent nets. NIPS, 2015.</strong> . <em></em></li>
+  <li id="ref-12"><strong>J. Koutn\'\ik, K. Greff, F. J. Gomez, and J. Schmidhuber. A clockwork RNN. In ICML, 2014.</strong> . <em></em></li>
+  <li id="ref-13"><strong>M. P. Marcus, M. A. Marcinkiewicz, and B. Santorini. Building a large annotated corpus of english: The Penn Treebank. Comput. Linguist., 19(2):313--330, June 1993.</strong> . <em></em></li>
+  <li id="ref-14"><strong>T. Mikolov. Statistical language models based on neural networks. Ph. D. thesis, Brno University of Technology, 2012.</strong> . <em></em></li>
+  <li id="ref-15"><strong>T. Mikolov, A. Joulin, S. Chopra, M. Mathieu, and M. Ranzato. Learning longer memory in recurrent neural networks. arXiv preprint: 1412.7753, 2014.</strong> . <em></em></li>
+  <li id="ref-16"><strong>M. C. Mozer and S. Das. A connectionist symbol manipulator that discovers the structure of context-free languages. NIPS, pages 863--863, 1993.</strong> . <em></em></li>
+  <li id="ref-17"><strong>B. Peng, Z. Lu, H. Li, and K. Wong. Towards Neural Network-based Reasoning. ArXiv preprint: 1508.05508, 2015.</strong> . <em></em></li>
+  <li id="ref-18"><strong>J. Pollack. The induction of dynamical recognizers. Machine Learning, 7(2-3):227--252, 1991.</strong> . <em></em></li>
+  <li id="ref-19"><strong>K. Steinbuch and U. Piske. Learning matrices and their applications. IEEE Transactions on Electronic Computers, 12:846--862, 1963.</strong> . <em></em></li>
+  <li id="ref-20"><strong>M. Sundermeyer, R. Schl\"uter, and H. Ney. LSTM neural networks for language modeling. In Interspeech, pages 194--197, 2012.</strong> . <em></em></li>
+  <li id="ref-21"><strong>W. K. Taylor. Pattern recognition by means of automatic analogue apparatus. Proceedings of The Institution of Electrical Engineers, 106:198--209, 1959.</strong> . <em></em></li>
+  <li id="ref-22"><strong>J. Weston, A. Bordes, S. Chopra, and T. Mikolov. Towards AI-complete question answering: A set of prerequisite toy tasks. arXiv preprint: 1502.05698, 2015.</strong> . <em></em></li>
+  <li id="ref-23"><strong>J. Weston, S. Chopra, and A. Bordes. Memory networks. In International Conference on Learning Representations (ICLR), 2015.</strong> . <em></em></li>
+  <li id="ref-24"><strong>K. Xu, J. Ba, R. Kiros, K. Cho, A. Courville, R. Salakhutdinov, R. Zemel, and Y. Bengio. Show, Attend and Tell: Neural Image Caption Generation with Visual Attention. ArXiv preprint: 1502.03044, 2015.</strong> . <em></em></li>
+  <li id="ref-25"><strong>W. Zaremba, I. Sutskever, and O. Vinyals. Recurrent neural network regularization. arXiv preprint arXiv:1409.2329, 2014. \endthebibliography</strong> . <em></em></li>
+</ol>
