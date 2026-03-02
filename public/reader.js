@@ -94,6 +94,7 @@
         // Extract metadata from the HTML content
         extractVariables();
         extractReferences();
+        state.mainReferences = { ...state.references }; // permanent copy, never overwritten
         setupMathToggles();
         fixOrphanedLatex();
         fixMboxCitations();
@@ -891,17 +892,20 @@
             li.dataset.ref = num;
             li.innerHTML = `<span class="ref-num">[${num}]</span> <span class="ref-title">${esc(ref.title)}</span>`;
             li.addEventListener('click', () => {
-                // Show detail using this panel's refs
+                const prev = state.references;
                 state.references = refsMap;
                 showRefDetail(num);
+                state.references = prev;
                 openRefInSplitView(num);
             });
             refList.appendChild(li);
         });
 
         if (activeNum) {
-            state.references = refsMap;
+            const prev = state.references;
+            state.references = refsMap; // temporary so showRefDetail finds the right ref
             showRefDetail(activeNum);
+            state.references = prev;    // restore immediately after
         }
     }
 
@@ -1485,8 +1489,8 @@
             if (badge) {
                 panelRefs.classList.remove('collapsed');
                 $('#refs-toggle').classList.add('active');
-                // Restore main article refs panel whenever clicking in the main article
-                switchRefsPanel(state.references, badge.dataset.ref, state.docId);
+                // Always restore from the permanent main-article refs copy
+                switchRefsPanel(state.mainReferences, badge.dataset.ref, state.docId);
                 openRefInSplitView(badge.dataset.ref);
             }
         });
