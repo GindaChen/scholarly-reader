@@ -376,6 +376,57 @@ async function importArxiv(arxivId, onProgress) {
     const mainFile = findMainTexFile(tmpDir);
     let fullTex = resolveInputs(mainFile, tmpDir);
 
+    // Detect PDF-only submissions (TeX just embeds a PDF, no real content)
+    const isPdfOnly = !fullTex.includes('\\section') && !fullTex.includes('\\begin{abstract}')
+        && fullTex.includes('\\includegraphics') && /\.pdf/.test(fullTex);
+
+    if (isPdfOnly) {
+        progress('PDF-only submission detected — fetching metadata from arXiv API…');
+        let apiTitle = 'Untitled Paper', apiAbstract = '', apiAuthors = [];
+        try {
+            const xml = await fetch(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(cleanId)}`).then(r => r.text());
+            const tMatch = xml.match(/<entry>[\s\S]*?<title>([\s\S]*?)<\/title>/);
+            const aMatch = xml.match(/<summary>([\s\S]*?)<\/summary>/);
+            const authMatches = [...xml.matchAll(/<name>([\s\S]*?)<\/name>/g)];
+            if (tMatch) apiTitle = tMatch[1].replace(/\s+/g, ' ').trim();
+            if (aMatch) apiAbstract = aMatch[1].replace(/\s+/g, ' ').trim();
+            apiAuthors = authMatches.map(m => m[1].trim());
+        } catch (e) { /* ignore */ }
+
+        const pdfUrl = `https://arxiv.org/pdf/${cleanId}`;
+        const html = `<h1>${escapeHtml(apiTitle)}</h1>
+<p class="authors">${escapeHtml(apiAuthors.join(', '))}</p>
+<h2>Abstract</h2>
+<p>${escapeHtml(apiAbstract)}</p>
+<div style="margin-top:1.5rem;">
+  <p style="color:var(--text-muted,#888);font-size:13px;margin-bottom:0.5rem;">
+    ⚠️ This paper was submitted as a PDF without TeX source. Displaying embedded PDF.
+  </p>
+  <iframe src="${pdfUrl}" style="width:100%;height:80vh;border:none;border-radius:6px;" title="${escapeHtml(apiTitle)}"></iframe>
+</div>`;
+
+        const outDir = path.join(DOCS_DIR, cleanId.replace('.', '-'));
+        fs.mkdirSync(outDir, { recursive: true });
+        fs.writeFileSync(path.join(outDir, 'paper.html'), html);
+
+        const short = apiTitle.length > 40 ? apiTitle.substring(0, 40) + '…' : apiTitle;
+        const metadata = {
+            title: apiTitle, short_title: short, type: 'journal-article',
+            authors: apiAuthors, date: new Date().toISOString().split('T')[0],
+            url: `https://arxiv.org/abs/${cleanId}`,
+            pdf: pdfUrl, arxiv_id: cleanId,
+            archive: 'arxiv', archive_url: `https://arxiv.org/abs/${cleanId}`,
+            source: 'arxiv-pipeline', pipeline_version: '2.2',
+            tags: ['auto-imported', 'arxiv-pipeline', 'pdf-only'],
+            abstract: apiAbstract,
+            files: [{ name: 'paper.html', format: 'html', description: 'PDF embed fallback', primary: true }],
+        };
+        const yaml = require('js-yaml');
+        fs.writeFileSync(path.join(outDir, 'metadata.yaml'), yaml.dump(metadata));
+        progress(`✅ PDF-only paper saved: ${apiTitle}`);
+        return { title: apiTitle, docId: cleanId.replace('.', '-'), docDir: outDir };
+    }
+
     // Also resolve .bbl file (compiled bibliography) — inline it so extractBibliography works
     const bblFiles = fs.readdirSync(tmpDir).filter(f => f.endsWith('.bbl'));
     for (const bblFile of bblFiles) {
