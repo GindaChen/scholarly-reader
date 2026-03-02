@@ -69,14 +69,6 @@ function convertTexToHtml(mainTexPath) {
     // Convert math environments
     body = convertMath(body);
 
-    // Normalize citation patterns before formatting strips ~
-    // \mbox{\cite{key}} → \cite{key}
-    body = body.replace(/\\mbox\{(\\cite[pt]?\{[^}]+\})\}/g, '$1');
-    // ~\mbox{[key]} and \mbox{[key]} → \cite{key}
-    body = body.replace(/~?\\mbox\{\[([^\]]+)\]\}/g, (_, key) => '\\cite{' + key + '}');
-    // ~[key] where key looks like citation → \cite{key}
-    body = body.replace(/~\[([A-Za-z][A-Za-z0-9_:.-]*)\]/g, (_, key) => '\\cite{' + key + '}');
-
     // Convert formatting
     body = convertFormatting(body);
 
@@ -106,25 +98,11 @@ function convertTexToHtml(mainTexPath) {
     // Clean up remaining LaTeX commands
     body = cleanRemainingLatex(body);
 
-    // Build key->num map for numeric citation display
-    const keyToNum = {};
-    refs.forEach((ref, i) => { keyToNum[ref.key] = i + 1; });
-
-    // Replace [key] style cite badges with numeric ones with data-title
-    body = body.replace(/<sup class="ref-badge" data-ref="([^"]+)">\[([^\]]+)\]<\/sup>/g, (_, key) => {
-        const ref = refs.find(r => r.key === key);
-        const num = keyToNum[key] || key;
-        const title = ref ? ref.title : key;
-        const arxivId = ref && ref.arxivId ? ` data-arxiv-id="${ref.arxivId}"` : '';
-        return `<sup class="ref-badge" data-ref="${num}" data-title="${escapeHtml(title)}"${arxivId}>${num}</sup>`;
-    });
-
     // Add reference section if we have refs
     if (refs.length > 0) {
         body += '\n<h2>References</h2>\n<ol class="references">\n';
-        refs.forEach((ref, i) => {
-            const num = i + 1;
-            body += `  <li id="ref-${num}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
+        refs.forEach(ref => {
+            body += `  <li id="ref-${ref.key}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
         });
         body += '</ol>\n';
     }
@@ -215,14 +193,12 @@ function convertMath(tex) {
         return `<div class="math-display"><span class="math-raw">${escapeHtml(math.trim())}</span></div>`;
     });
 
-    // align/align*, eqnarray/eqnarray*, gather, multline
-    const displayEnvs = ['align\\*?', 'eqnarray\\*?', 'gather\\*?', 'multline\\*?', 'flalign\\*?'];
-    displayEnvs.forEach(env => {
-        tex = tex.replace(new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g'), (_, math) => {
-            const lines = math.split('\\\\').map(l => l.trim()).filter(l => l);
-            const formatted = lines.map(l => l.replace(/&+/g, ' ')).join(' \\\\ ');
-            return `<div class="math-display"><span class="math-raw">${escapeHtml(formatted)}</span></div>`;
-        });
+    // align/align*
+    tex = tex.replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g, (_, math) => {
+        // Split on \\ for multiple lines
+        const lines = math.split('\\\\').map(l => l.trim()).filter(l => l);
+        const formatted = lines.map(l => l.replace(/&/g, ' ')).join('\n');
+        return `<div class="math-display"><span class="math-raw">${escapeHtml(formatted)}</span></div>`;
     });
 
     // Display math: $$...$$
@@ -230,18 +206,8 @@ function convertMath(tex) {
         return `<div class="math-display"><span class="math-raw">${escapeHtml(math.trim())}</span></div>`;
     });
 
-    // Display math: \[...\]
-    tex = tex.replace(/\\\[([\s\S]*?)\\\]/g, (_, math) => {
-        return `<div class="math-display"><span class="math-raw">${escapeHtml(math.trim())}</span></div>`;
-    });
-
     // Inline math: $...$
     tex = tex.replace(/\$([^$]+)\$/g, (_, math) => {
-        return `<span class="math-inline"><span class="math-raw">${escapeHtml(math)}</span></span>`;
-    });
-
-    // Inline math: \(...\)
-    tex = tex.replace(/\\\(([\s\S]*?)\\\)/g, (_, math) => {
         return `<span class="math-inline"><span class="math-raw">${escapeHtml(math)}</span></span>`;
     });
 
@@ -276,16 +242,12 @@ function convertLists(tex) {
 }
 
 function convertTables(tex) {
-    // table/table* wrapper + any tabular variant inside
-    tex = tex.replace(/\begin{table*?}([sS]*?)\end{table*?}/g, (_, inner) => {
-        const caption = (inner.match(/\caption{([sS]*?)}/) || [])[1] || '';
-        const tabMatch = inner.match(/\begin{(tabular[xy]?|tabulary|longtable)}(?:{[^}]*}){1,2}([sS]*?)\end{(?:tabular[xy]?|tabulary|longtable)}/);
-        const tableHtml = tabMatch ? convertTabular(tabMatch[2]) : '';
-        return '<figure>' + tableHtml + (caption ? '<figcaption>' + cleanText(caption) + '</figcaption>' : '') + '</figure>';
+    tex = tex.replace(/\\begin\{table\}[\s\S]*?\\begin\{tabular\}\{([^}]*)\}([\s\S]*?)\\end\{tabular\}[\s\S]*?\\end\{table\}/g, (_, cols, content) => {
+        return convertTabular(content);
     });
 
-    // Standalone tabular / tabulary / tabularx / longtable
-    tex = tex.replace(/\begin{(tabular[xy]?|tabulary|longtable)}(?:{[^}]*}){1,2}([sS]*?)\end{(?:tabular[xy]?|tabulary|longtable)}/g, (_, _env, content) => {
+    // Standalone tabular
+    tex = tex.replace(/\\begin\{tabular\}\{([^}]*)\}([\s\S]*?)\\end\{tabular\}/g, (_, cols, content) => {
         return convertTabular(content);
     });
 
@@ -322,7 +284,7 @@ function convertCitations(tex) {
     tex = tex.replace(/\\cite[pt]?\{([^}]+)\}/g, (_, keys) => {
         return keys.split(',').map(k => {
             const key = k.trim();
-            return `<sup class=\"ref-badge\" data-ref=\"${key}\">[${key}]</sup>`;
+            return `<sup class="ref-badge" data-ref="${key}">[${key}]</sup>`;
         }).join('');
     });
     return tex;
@@ -410,35 +372,22 @@ function extractBibliography(bibTex) {
         // Clean up newblock
         content = content.replace(/\\newblock\s*/g, '');
 
-        // Try to extract arxiv ID
-        const arxivMatch = content.match(/arxiv[:\s/]*([0-9]{4}\.[0-9]{4,5})/i);
-
         // Extract parts
         const parts = content.split('\n').map(l => l.trim()).filter(l => l);
         const authors = cleanText(parts[0] || '');
         const title = cleanText(parts[1] || '');
         const venue = cleanText(parts.slice(2).join(' '));
 
-        refs.push({ key, authors, title, venue, arxivId: arxivMatch ? arxivMatch[1] : '' });
+        refs.push({ key, authors, title, venue });
     }
 
     return refs;
 }
 
 function cleanRemainingLatex(tex) {
-    // Clean up brace-group formatting: {\bf ...}, {\it ...} etc.
-    tex = tex.replace(/\{\\bf\s+([^}]+)\}/g, '<strong>$1</strong>');
-    tex = tex.replace(/\{\\it\s+([^}]+)\}/g, '<em>$1</em>');
-    tex = tex.replace(/\{\\em\s+([^}]+)\}/g, '<em>$1</em>');
-    tex = tex.replace(/\{\\tt\s+([^}]+)\}/g, '<code>$1</code>');
-    tex = tex.replace(/\{\\rm\s+([^}]+)\}/g, '$1');
-    // Remove remaining entire unhandled \begin{env}...\end{env} blocks
-    // Repeat a few times to catch nested ones
-    for (let i = 0; i < 4; i++) {
-        tex = tex.replace(/\begin\{(?!document|itemize|enumerate|description)[^}]+\}(?:\[[^\]]*\])?(?:\{[^}]*\})?[\s\S]*?\end\{(?!document|itemize|enumerate|description)[^}]+\}/g, '');
-    }
-    tex = tex.replace(/\begin\{[^}]+\}(\[.*?\])?/g, '');
-    tex = tex.replace(/\end\{[^}]+\}/g, '');
+    // Remove remaining \begin/\end blocks we don't handle
+    tex = tex.replace(/\\begin\{[^}]+\}(\[.*?\])?/g, '');
+    tex = tex.replace(/\\end\{[^}]+\}/g, '');
 
     // Remove \vspace, \hspace, \noindent, etc.
     tex = tex.replace(/\\(vspace|hspace|noindent|centering|raggedright|raggedleft|small|large|Large|normalsize|bigskip|medskip|smallskip|newpage|clearpage|pagebreak)\b(\{[^}]*\})?/g, '');
