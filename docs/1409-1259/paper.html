@@ -23,7 +23,7 @@
 
 <p>A new approach for statistical machine translation based purely on neural
 networks has recently been proposed~<sup class="ref-badge" data-ref="7" data-title="2013.">7</sup><sup class="ref-badge" data-ref="11" data-title="2014.">11</sup>. This
-new approach, which we refer to as {\it neural machine translation}, is inspired
+new approach, which we refer to as <em>neural machine translation</em>, is inspired
 by the recent trend of deep representational learning. All the neural network
 models used in <sup class="ref-badge" data-ref="7" data-title="2013.">7</sup><sup class="ref-badge" data-ref="11" data-title="2014.">11</sup><sup class="ref-badge" data-ref="3" data-title="Schwenk, and Yoshua Bengio.">3</sup> consist of an
 encoder and a decoder. The encoder extracts a fixed-length vector representation
@@ -55,7 +55,7 @@ systems.</p>
 <p>In this paper, we analyze two neural machine translation models. One of them is
 the RNN Encoder--Decoder that was proposed recently in <sup class="ref-badge" data-ref="3" data-title="Schwenk, and Yoshua Bengio.">3</sup>. The other
 model replaces the encoder in the RNN Encoder--Decoder model with a novel neural
-network, which we call a {\it gated recursive convolutional neural network}
+network, which we call a <em>gated recursive convolutional neural network</em>
 (grConv). We evaluate these two models on the task of translation from French to
 English.</p>
 
@@ -548,12 +548,11 @@ neural machine translation models.</p>
 
 <p>Additionally, we present here what type of structure the proposed gated
 recursive convolutional network learns to represent. With a sample sentence
-{\it ``Obama is the President of the United States''}, we present the parsing
+<em>``Obama is the President of the United States''</em>, we present the parsing
 structure learned by the grConv encoder and the generated translations, in
 Fig.~<a href="#fig:obama" class="cross-ref">Fig. 6</a>. The figure suggests that the grConv extracts the vector
-representation of the sentence by first merging {\it ``of the United States''}
-together with {\it ``is the President of''} and finally combining this with {\it
-``Obama is''} and {\it ``.''}, which is well correlated with our intuition.</p>
+representation of the sentence by first merging <em>``of the United States''</em>
+together with <em>``is the President of''</em> and finally combining this with <em>``Obama is''</em> and <em>``.''</em>, which is well correlated with our intuition.</p>
 
 <p>Despite the lower performance the grConv showed compared
 to the RNN Encoder--Decoder,
@@ -594,7 +593,7 @@ different approach in dealing with words.</p>
 system from underperforming with long sentences.  Lastly, we need to explore
 different neural architectures, especially for the decoder. Despite the radical
 difference in the architecture between RNN and grConv which were used as an
-encoder, both models suffer from {\it the curse of sentence length}. This
+encoder, both models suffer from <em>the curse of sentence length</em>. This
 suggests that it may be due to the lack of representational power in the
 decoder. Further investigation and research are required.</p>
 

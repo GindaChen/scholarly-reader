@@ -56,8 +56,17 @@ function extractKatexMacros(texSource) {
         const name = m[1];
         const numArgs = parseInt(m[2] || '0');
         const replacement = m[3];
-        // KaTeX handles #1, #2 etc natively in macro definitions
-        macros['\\' + name] = replacement;
+        // Sanitize macro replacement for KaTeX:
+        // - Remove $...$ wrappers inside definitions (already in math mode)
+        // - Replace \mbox{oldmath{...}} with oldsymbol{...}
+        // - Replace oldsymbol{\ensuremath{...}} patterns
+        let def = replacement
+            .replace(/\\mbox\{\\boldmath\{\$([^$]*)\$\}\}/g, '\\boldsymbol{$1}')
+            .replace(/\\mbox\{\\boldmath\{([^}]*)\}\}/g, '\\boldsymbol{$1}')
+            .replace(/\\ensuremath\{([^}]*)\}/g, '$1')
+            .replace(/\\mbox\{([^}]*)\}/g, '\\text{$1}')
+            .replace(/\$/g, '');
+        macros['\\' + name] = def;
     }
 
     // Match \def\name{replacement} (zero-arg only)
@@ -88,6 +97,9 @@ function renderMath(latex, displayMode = false, extraMacros = {}) {
 
         // Strip HTML tags that leaked into math (e.g., <span> label anchors)
         clean = clean.replace(/<[^>]+>/g, '');
+        // Replace < > that aren't HTML tags with \lt \gt for KaTeX
+        clean = clean.replace(/<(?![a-zA-Z/])/g, '\\lt ');
+        clean = clean.replace(/(?<![a-zA-Z"'])>/g, '\\gt ');
         // Unescape HTML entities that may have been escaped
         clean = clean.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
 

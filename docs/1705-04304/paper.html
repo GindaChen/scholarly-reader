@@ -228,10 +228,10 @@ These models often use a fixed input and output vocabulary, which prevents them 
 
 <table class="article-table">
   <thead><tr>
-    <th>{\bf Model}</th>
-    <th>{\bf ROUGE-1}</th>
-    <th>{\bf ROUGE-2}</th>
-    <th>{\bf ROUGE-L}</th>
+    <th><strong>Model</strong></th>
+    <th><strong>ROUGE-1</strong></th>
+    <th><strong>ROUGE-2</strong></th>
+    <th><strong>ROUGE-L</strong></th>
   </tr></thead>
   <tbody>
   <tr>
@@ -281,9 +281,9 @@ These models often use a fixed input and output vocabulary, which prevents them 
 
 ### Experiments
 
-<p>\noindent{\bf Setup}: We evaluate the intra-decoder attention mechanism and the mixed-objective learning by running the following experiments on both datasets. We first run maximum-likelihood (ML) training with and without intra-decoder attention (removing <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>c</mi><mi>t</mi><mi>d</mi></msubsup></mrow><annotation encoding="application/x-tex">c^d_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0961em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span></span></span></span></span> from Equations <a href="#eq:output-layer" class="cross-ref">Eq. 9</a> and <a href="#eq:pointer-switch" class="cross-ref">Eq. 11</a> to disable intra-attention) and select the best performing architecture. Next, we initialize our model with the best ML parameters and we compare reinforcement learning (RL) with our mixed-objective learning (ML+RL), following our objective functions in Equation <a href="#eq:rl-loss" class="cross-ref">Eq. 15</a> and <a href="#eq:mixed-loss" class="cross-ref">Eq. 16</a>. The hyperparameters and other implementation details are described in the Appendix.</p>
+<p>\noindent<strong>Setup</strong>: We evaluate the intra-decoder attention mechanism and the mixed-objective learning by running the following experiments on both datasets. We first run maximum-likelihood (ML) training with and without intra-decoder attention (removing <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>c</mi><mi>t</mi><mi>d</mi></msubsup></mrow><annotation encoding="application/x-tex">c^d_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0961em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8491em;"><span style="top:-2.453em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span></span></span></span></span> from Equations <a href="#eq:output-layer" class="cross-ref">Eq. 9</a> and <a href="#eq:pointer-switch" class="cross-ref">Eq. 11</a> to disable intra-attention) and select the best performing architecture. Next, we initialize our model with the best ML parameters and we compare reinforcement learning (RL) with our mixed-objective learning (ML+RL), following our objective functions in Equation <a href="#eq:rl-loss" class="cross-ref">Eq. 15</a> and <a href="#eq:mixed-loss" class="cross-ref">Eq. 16</a>. The hyperparameters and other implementation details are described in the Appendix.</p>
 
-<p>\noindent{\bf ROUGE metrics and options}: We report the full-length F-1 score of the ROUGE-1, ROUGE-2 and ROUGE-L metrics with the Porter stemmer option. For RL and ML+RL training, we use the ROUGE-L score as a reinforcement reward. We also tried ROUGE-2 but we found that it created summaries that almost always reached the maximum length, often ending sentences abruptly.</p>
+<p>\noindent<strong>ROUGE metrics and options</strong>: We report the full-length F-1 score of the ROUGE-1, ROUGE-2 and ROUGE-L metrics with the Porter stemmer option. For RL and ML+RL training, we use the ROUGE-L score as a reinforcement reward. We also tried ROUGE-2 but we found that it created summaries that almost always reached the maximum length, often ending sentences abruptly.</p>
 
 ### Quantitative analysis
 
@@ -308,9 +308,9 @@ These models often use a fixed input and output vocabulary, which prevents them 
 <table class="article-table">
   <caption>Comparison of ROUGE recall scores for lead baselines, the extractive model of \protect[durrett2016learning] and our model on their NYT dataset splits.</caption>
   <thead><tr>
-    <th>{\bf Model}</th>
-    <th>{\bf R-1}</th>
-    <th>{\bf R-2}</th>
+    <th><strong>Model</strong></th>
+    <th><strong>R-1</strong></th>
+    <th><strong>R-2</strong></th>
   </tr></thead>
   <tbody>
   <tr>
@@ -344,9 +344,9 @@ These models often use a fixed input and output vocabulary, which prevents them 
 <table class="article-table">
   <caption>Comparison of human readability scores on a random subset of the CNN/Daily Mail test dataset. All models are with intra-decoder attention.</caption>
   <thead><tr>
-    <th>{\bf Model}</th>
-    <th>{\bf Readability}</th>
-    <th>{\bf Relevance}</th>
+    <th><strong>Model</strong></th>
+    <th><strong>Readability</strong></th>
+    <th><strong>Relevance</strong></th>
   </tr></thead>
   <tbody>
   <tr>
@@ -369,9 +369,9 @@ These models often use a fixed input and output vocabulary, which prevents them 
 
 <p>We perform human evaluation to ensure that our increase in ROUGE scores is also followed by an increase in human readability and quality. In particular, we want to know whether the ML+RL training objective did improve readability compared to RL.</p>
 
-<p>\noindent{\bf Evaluation setup}: To perform this evaluation, we randomly select 100 test examples from the CNN/Daily Mail dataset. For each example, we show the original article, the ground truth summary as well as summaries generated by different models side by side to a human evaluator. The human evaluator does not know which summaries come from which model or which one is the ground truth. Two scores from 1 to 10 are then assigned to each summary, one for relevance (how well does the summary capture the important parts of the article) and one for readability (how well-written the summary is). Each summary is rated by 5 different human evaluators on Amazon Mechanical Turk and the results are averaged across all examples and evaluators.</p>
+<p>\noindent<strong>Evaluation setup</strong>: To perform this evaluation, we randomly select 100 test examples from the CNN/Daily Mail dataset. For each example, we show the original article, the ground truth summary as well as summaries generated by different models side by side to a human evaluator. The human evaluator does not know which summaries come from which model or which one is the ground truth. Two scores from 1 to 10 are then assigned to each summary, one for relevance (how well does the summary capture the important parts of the article) and one for readability (how well-written the summary is). Each summary is rated by 5 different human evaluators on Amazon Mechanical Turk and the results are averaged across all examples and evaluators.</p>
 
-<p>\noindent{\bf Results}: Our human evaluation results are shown in Table <a href="#tab:human-results" class="cross-ref">Table 3</a>. We can see that even though RL has the highest ROUGE-1 and ROUGE-L scores, it produces the least readable summaries among our experiments. The most common readability issue observed in our RL results, as shown in the example of Table <a href="#tab:examples" class="cross-ref"> ?</a>, is the presence of short and truncated sentences towards the end of sequences. This confirms that optimizing for single discrete evaluation metric such as ROUGE with RL can be detrimental to the model quality.</p>
+<p>\noindent<strong>Results</strong>: Our human evaluation results are shown in Table <a href="#tab:human-results" class="cross-ref">Table 3</a>. We can see that even though RL has the highest ROUGE-1 and ROUGE-L scores, it produces the least readable summaries among our experiments. The most common readability issue observed in our RL results, as shown in the example of Table <a href="#tab:examples" class="cross-ref"> ?</a>, is the presence of short and truncated sentences towards the end of sequences. This confirms that optimizing for single discrete evaluation metric such as ROUGE with RL can be detrimental to the model quality.</p>
 
 <p>On the other hand, our RL+ML summaries obtain the highest readability and relevance scores among our models, hence solving the readability issues of the RL model while also having a higher ROUGE score than ML. This demonstrates the usefulness and value of our RL+ML training method for abstractive summarization.</p>
 

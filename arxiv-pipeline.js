@@ -184,10 +184,19 @@ function processSection(content) {
     result = result.replace(/\\subsection\*?\{([^}]+)\}/g, '<h3>$1</h3>');
     result = result.replace(/\\subsubsection\*?\{([^}]+)\}/g, '<h4>$1</h4>');
 
-    // Convert formatting
+    // Convert formatting — both 	extbf{} and {f } brace-group forms
     result = result.replace(/\\textbf\{([^}]+)\}/g, '<strong>$1</strong>');
     result = result.replace(/\\textit\{([^}]+)\}/g, '<em>$1</em>');
     result = result.replace(/\\emph\{([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\\textrm\{([^}]+)\}/g, '$1');
+    result = result.replace(/\\texttt\{([^}]+)\}/g, '<code>$1</code>');
+    // Brace-group forms: {f ...}, {\it ...}, {\em ...}, {	t ...}
+    result = result.replace(/\{\\bf\s+([^}]+)\}/g, '<strong>$1</strong>');
+    result = result.replace(/\{\\it\s+([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\{\\em\s+([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\{\\tt\s+([^}]+)\}/g, '<code>$1</code>');
+    result = result.replace(/\{\\rm\s+([^}]+)\}/g, '$1');
+    result = result.replace(/\{\\sc\s+([^}]+)\}/g, '<span style="font-variant:small-caps">$1</span>');
     result = result.replace(/\\url\{([^}]+)\}/g, '[$1]($1)');
     result = result.replace(/\\paragraph\{([^}]+)\}/g, '**$1.**');
     result = result.replace(/~(?!\\)/g, ' ');

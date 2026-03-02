@@ -435,7 +435,13 @@ function extractBibliography(bibTex) {
 }
 
 function cleanRemainingLatex(tex) {
-    // Remove entire unhandled \begin{env}...\end{env} blocks
+    // Clean up brace-group formatting: {\bf ...}, {\it ...} etc.
+    tex = tex.replace(/\{\\bf\s+([^}]+)\}/g, '<strong>$1</strong>');
+    tex = tex.replace(/\{\\it\s+([^}]+)\}/g, '<em>$1</em>');
+    tex = tex.replace(/\{\\em\s+([^}]+)\}/g, '<em>$1</em>');
+    tex = tex.replace(/\{\\tt\s+([^}]+)\}/g, '<code>$1</code>');
+    tex = tex.replace(/\{\\rm\s+([^}]+)\}/g, '$1');
+    // Remove remaining entire unhandled \begin{env}...\end{env} blocks
     // Repeat a few times to catch nested ones
     for (let i = 0; i < 4; i++) {
         tex = tex.replace(/\begin\{(?!document|itemize|enumerate|description)[^}]+\}(?:\[[^\]]*\])?(?:\{[^}]*\})?[\s\S]*?\end\{(?!document|itemize|enumerate|description)[^}]+\}/g, '');

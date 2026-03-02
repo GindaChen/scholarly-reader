@@ -1,4 +1,4 @@
-<h1>Sequence to Sequence Learningwith Neural Networks</h1>
+<h1>Sequence to Sequence Learning with Neural Networks</h1>
 
 <p class="authors"></p>
 
@@ -94,7 +94,7 @@ to sequences with neural networks, but it assumes a monotonic alignment
 between the inputs and the outputs <sup class="ref-badge" data-ref="11" data-title="Connectionist temporal classification: labelling unsegmented sequence">11</sup>.</p>
 
 <p>The main result of this work is the following.  On the WMT'14 English
-to French translation task, we obtained a BLEU score of {\bf 34.81} by
+to French translation task, we obtained a BLEU score of <strong>34.81</strong> by
 directly extracting translations from an ensemble of 5 deep LSTMs
 (with 384M parameters and 8,000 dimensional state each) using a simple left-to-right beam-search
 decoder.  This is by far the best result achieved by direct
@@ -223,7 +223,7 @@ an SMT baseline.  We report the accuracy of these translation methods,
 present sample translations, and visualize the resulting sentence
 representation.
 
-### Dataset details
+<h3>Dataset details</h3>
 
 <p>We used the WMT'14 English to French dataset.  We trained our models
 on a subset of 12M sentences consisting of 348M French words and 304M
@@ -239,7 +239,7 @@ each word, we used a fixed vocabulary for both languages.  We used
 of the most frequent words for the target language.  Every
 out-of-vocabulary word was replaced with a special ``UNK'' token.</p>
 
-### Decoding and Rescoring
+<h3>Decoding and Rescoring</h3>
 
 <p>The core of our experiments involved training a large deep LSTM on
 many sentence pairs. We trained it by maximizing the log
@@ -274,7 +274,7 @@ baseline system <sup class="ref-badge" data-ref="29" data-title="University le m
 computed the log probability of every hypothesis with our LSTM and
 took an even average with their score and the LSTM's score.</p>
 
-### Reversing the Source Sentences
+<h3>Reversing the Source Sentences</h3>
 <span id="sec:rev_rev" class="label-anchor"></span>
 
 <p>While the LSTM is capable of solving problems with long term
@@ -306,7 +306,7 @@ long sentences than LSTMs trained on the raw source sentences (see
 sec.~<a href="#sec:long_sentences" class="cross-ref">Section 4</a>), which suggests that reversing the
 input sentences results in LSTMs with better memory utilization.</p>
 
-### Training details
+<h3>Training details</h3>
 
 <p>We found that the LSTM models are fairly easy to train.  We used deep
 LSTMs with 4 layers, with 1000 cells at each layer and 1000
@@ -342,7 +342,7 @@ recurrent connections (32M for the ``encoder'' LSTM and 32M for the
   address this problem, we made sure that all sentences in a
   minibatch are roughly of the same length, yielding a 2x speedup.</p>
 
-### Parallelization
+<h3>Parallelization</h3>
 
 <p>A C++ implementation of deep LSTM with the configuration from the
 previous section on a single GPU processes a speed of approximately
@@ -357,11 +357,11 @@ resulting implementation achieved a speed of 6,300 (both English and
 French) words per second with a minibatch size of 128. 
 Training took about a ten days with this implementation.</p>
 
-### Experimental Results
+<h3>Experimental Results</h3>
 
 <p>We used the cased BLEU score <sup class="ref-badge" data-ref="24" data-title="BLEU: a method for automatic evaluation of machine translation.">24</sup> to evaluate the quality of our
 translations. We computed our BLEU scores using \texttt{multi-bleu.pl} 
-on the *tokenized* predictions and ground truth.
+on the <em>tokenized</em> predictions and ground truth.
 This way of evaluating the BELU score is consistent with <sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup> and <sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and" data-arxiv-id="1409.0473">2</sup>, and reproduces
 the 33.3 score of <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>.
 However, if we evaluate the best WMT'14 system <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for wmt-14.">9</sup>
@@ -384,8 +384,8 @@ list of the baseline system.</p>
   set (ntst14).  Note that an ensemble of 5 LSTMs with a beam of size
   2 is cheaper than of a single LSTM with a beam of size 12.</caption>
   <thead><tr>
-    <th>{\bf Method}</th>
-    <th>{\bf test BLEU score (ntst14) }</th>
+    <th><strong>Method</strong></th>
+    <th><strong>test BLEU score (ntst14) </strong></th>
   </tr></thead>
   <tbody>
   <tr>
@@ -418,7 +418,7 @@ list of the baseline system.</p>
   </tr>
   <tr>
     <td>Ensemble of 5 reversed LSTMs, beam size 12</td>
-    <td>{\bf 34.81}</td>
+    <td><strong>34.81</strong></td>
   </tr>
   </tbody>
 </table>
@@ -427,8 +427,8 @@ list of the baseline system.</p>
   <caption>Methods that use neural networks together with an SMT system
   on the WMT'14 English to French test set (ntst14).</caption>
   <thead><tr>
-    <th>{\bf Method}</th>
-    <th>{\bf test BLEU score (ntst14) }</th>
+    <th><strong>Method</strong></th>
+    <th><strong>test BLEU score (ntst14) </strong></th>
   </tr></thead>
   <tbody>
   <tr>
@@ -441,7 +441,7 @@ list of the baseline system.</p>
   </tr>
   <tr>
     <td>Best WMT'14 result <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for wmt-14.">9</sup></td>
-    <td>{\bf 37.0}</td>
+    <td><strong>37.0</strong></td>
   </tr>
   <tr>
     <td>Rescoring the baseline 1000-best with a single forward LSTM</td>
@@ -453,7 +453,7 @@ list of the baseline system.</p>
   </tr>
   <tr>
     <td>Rescoring the baseline 1000-best with an ensemble of 5 reversed LSTMs</td>
-    <td>{\bf 36.5}</td>
+    <td><strong>36.5</strong></td>
   </tr>
   <tr>
     <td>Oracle Rescoring of the Baseline 1000-best lists</td>
@@ -462,7 +462,7 @@ list of the baseline system.</p>
   </tbody>
 </table>
 
-### Performance on long sentences
+<h3>Performance on long sentences</h3>
 <span id="sec:long_sentences" class="label-anchor"></span>
 
 <p>We were surprised to discover that the LSTM did well on long
@@ -475,12 +475,12 @@ their translations.</p>
   alongside the ground truth translations.  The reader can verify that
   the translations are sensible using Google translate.</caption>
   <thead><tr>
-    <th>{\bf  Type}</th>
-    <th>{\bf Sentence}</th>
+    <th><strong>Type</strong></th>
+    <th><strong>Sentence</strong></th>
   </tr></thead>
   <tbody>
   <tr>
-    <td>{\bf Our model}</td>
+    <td><strong>Our model</strong></td>
     <td>Ulrich UNK , membre du conseil d' administration du constructeur automobile Audi ,</td>
   </tr>
   <tr>
@@ -496,7 +496,7 @@ their translations.</p>
     <td>ne soient pas  utilis\'{e}s comme appareils d' \'{e}coute \`{a} distance .</td>
   </tr>
   <tr>
-    <td>{\bf  Truth}</td>
+    <td><strong>Truth</strong></td>
     <td>Ulrich Hackenberg , membre du conseil d' administration du constructeur automobile Audi ,</td>
   </tr>
   <tr>
@@ -512,7 +512,7 @@ their translations.</p>
     <td>depuis des ann\'{e}es .</td>
   </tr>
   <tr>
-    <td>{\bf Our model}</td>
+    <td><strong>Our model</strong></td>
     <td>`` Les t\'{e}l\'{e}phones cellulaires , qui sont vraiment une question , non seulement parce qu' ils</td>
   </tr>
   <tr>
@@ -528,7 +528,7 @@ their translations.</p>
     <td>lorsqu' ils sont dans l' air '' , dit UNK .</td>
   </tr>
   <tr>
-    <td>{\bf Truth}</td>
+    <td><strong>Truth</strong></td>
     <td>`` Les t\'{e}l\'{e}phones portables sont v\'{e}ritablement un probl\`{e}me , non seulement parce qu' ils</td>
   </tr>
   <tr>
@@ -544,7 +544,7 @@ their translations.</p>
     <td>t\'{e}l\'{e}phonie mobile s' ils sont utilis\'{e}s \`{a} bord '' , a d\'{e}clar\'{e} Rosenker .</td>
   </tr>
   <tr>
-    <td>{\bf Our model}</td>
+    <td><strong>Our model</strong></td>
     <td>Avec la cr\'{e}mation , il y a un `` sentiment de violence contre le corps d' un \^{e}tre cher '' ,</td>
   </tr>
   <tr>
@@ -556,7 +556,7 @@ their translations.</p>
     <td>d\'{e}composition ``  qui accompagnera les \'{e}tapes du deuil '' .</td>
   </tr>
   <tr>
-    <td>{\bf Truth}</td>
+    <td><strong>Truth</strong></td>
     <td>Il y a , avec la cr\'{e}mation , `` une violence faite au corps aim\'{e} '' ,</td>
   </tr>
   <tr>
@@ -570,7 +570,7 @@ their translations.</p>
   </tbody>
 </table>
 
-### Model Analysis
+<h3>Model Analysis</h3>
 
 <p>One of the attractive features of our model is its ability to turn a
 sequence of words into a vector of fixed dimensionality.

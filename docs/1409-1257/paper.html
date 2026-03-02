@@ -113,8 +113,8 @@ of higher computational cost.</p>
 
 <p>In this section, however, we propose to segment an input sentence such that each
 segmented clause can be easily translated by the RNN Encoder--Decoder. In other
-words, we wish to find a segmentation that maximizes the total {\it confidence
-score} which is a sum of the confidence scores of the phrases in the
+words, we wish to find a segmentation that maximizes the total <em>confidence
+score</em> which is a sum of the confidence scores of the phrases in the
 segmentation.  Once the confidence score is defined, the problem of finding the
 best segmentation can be formulated as an integer programming problem.</p>
 
@@ -220,10 +220,9 @@ scored independently.</p>
 We use a bilingual, parallel corpus of 348M words selected by the method of
 <sup class="ref-badge" data-ref="1" data-title="2011.">1</sup> from a combination of Europarl (61M), news commentary (5.5M),
 UN (421M) and two crawled corpora of 90M and 780M words respectively.
-The performance of our models was tested on {\tt news-test2012}, {\tt
-news-test2013}, and {\tt news-test2014}. When comparing with the phrase-based
+The performance of our models was tested on <code>news-test2012</code>, <code>news-test2013</code>, and <code>news-test2014</code>. When comparing with the phrase-based
 SMT system Moses <sup class="ref-badge" data-ref="9" data-title="Federico, Nicola Bertoldi, Brooke Cowan, Wade Shen, Christine Moran, Richard">9</sup>, the first two were used as a development set
-for tuning Moses while {\tt news-test2014} was used as our test set.</p>
+for tuning Moses while <code>news-test2014</code> was used as our test set.</p>
 
 <p>To train the neural network models, we use only the sentence pairs in the
 parallel corpus, where both English and French sentences are at most 30 words
@@ -271,7 +270,7 @@ approach follows the proposed algorithm, however, using a uniform random
 confidence score.</p>
 
 <table class="article-table">
-  <caption>BLEU score computed on {\tt news-test2014</caption>
+  <caption>BLEU score computed on <code>news-test2014</caption>
   <thead><tr>
     <th>Model</th>
     <th>Test set</th>
@@ -312,7 +311,7 @@ score. For instance, one may use only the `direct' translation model or varying
 penalties for phrase lengths.</p>
 
 <p>In this section, we test three different confidence score:
-\begin{description}
+\begin{description</code>
 \item[<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo stretchy="false">(</mo><mi>f</mi><mo>∣</mo><mi>e</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p(f \mid e)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">e</span><span class="mclose">)</span></span></span></span></span>] Using a single translation model
 \item[<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo stretchy="false">(</mo><mi>f</mi><mo>∣</mo><mi>e</mi><mo stretchy="false">)</mo><mo>+</mo><mi>p</mi><mo stretchy="false">(</mo><mi>e</mi><mo>∣</mo><mi>f</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p(f \mid e) + p(e \mid f)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">e</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mclose">)</span></span></span></span></span>] Using both direct and reverse translation
     models without the short phrase penalty
@@ -575,11 +574,11 @@ shows one such example.</p>
   </tr>
   <tr>
     <td>With segmentation</td>
-    <td>Il a néanmoins félicité le Gouvernement de répondre à sa demande d' aide urgente qu'il {\bf a soulevée . avec }le Premier ministre début mai .</td>
+    <td>Il a néanmoins félicité le Gouvernement de répondre à sa demande d' aide urgente qu'il <strong>a soulevée . avec </strong>le Premier ministre début mai .</td>
   </tr>
   <tr>
     <td>Without segmentation</td>
-    <td>Il a néanmoins félicité le gouvernement de répondre à sa demande d' aide urgente qu'il {\bf a adressée au } Premier Ministre début mai .</td>
+    <td>Il a néanmoins félicité le gouvernement de répondre à sa demande d' aide urgente qu'il <strong>a adressée au </strong> Premier Ministre début mai .</td>
   </tr>
   </tbody>
 </table>

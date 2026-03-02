@@ -440,8 +440,8 @@ sequence, which is then converted into the corresponding word
 sequence.</p>
 
 <p>Here is an example of a word sequence and the corresponding wordpiece sequence:
-- {\bf Word}: Jet makers feud over seat width with big orders at stake
-- {\bf wordpieces}: \_J et \_makers \_fe ud \_over \_seat \_width \_with \_big \_orders \_at \_stake</p>
+- <strong>Word</strong>: Jet makers feud over seat width with big orders at stake
+- <strong>wordpieces</strong>: \_J et \_makers \_fe ud \_over \_seat \_width \_with \_big \_orders \_at \_stake</p>
 
 <p>In the above example, the word ``Jet'' is broken into two wordpieces
 ``\_J'' and ``et'', and the word ``feud'' is broken into two
@@ -494,10 +494,10 @@ constituent characters.
 Special prefixes are prepended to the characters, to 1) show the location of
 the characters in a word, and 2) to distinguish them from normal in-vocabulary
 characters. There are three
-prefixes: {\tt <B>,<M>, and <E>}, indicating beginning of the word, middle 
+prefixes: <code><B>,<M>, and <E></code>, indicating beginning of the word, middle 
 of the word and end of the word, respectively. For example, let's assume the 
-word {\tt Miki} is not in the vocabulary. It will be preprocessed into a
-sequence of special tokens: {\tt <B>M <M>i <M>k <E>i}. The process is
+word <code>Miki</code> is not in the vocabulary. It will be preprocessed into a
+sequence of special tokens: <code><B>M <M>i <M>k <E>i</code>. The process is
 done on both the source and the target sentences. During decoding, the
 output may also contain sequences of special tokens. With the
 prefixes, it is trivial to reverse the tokenization to the original words as 

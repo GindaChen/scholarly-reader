@@ -80,7 +80,7 @@ algorithms and generalize beyond the length of the training instances.</p>
 limitation is built into its definition. Since the attention mask
 is computed using a Softmax, it by definition tries to focus on
 a *single* element of the memory it is attending to. In the
-extreme case, also known as {\em hard attention}~<sup class="ref-badge" data-ref="8" data-title="Salakhutdinov, Richard S. Zemel, and Yoshua Bengio.">8</sup>,
+extreme case, also known as <em>hard attention</em>~<sup class="ref-badge" data-ref="8" data-title="Salakhutdinov, Richard S. Zemel, and Yoshua Bengio.">8</sup>,
 one of the memory elements is selected and the selection is trained
 using the REINFORCE algorithm  (since this is not differentiable)~<sup class="ref-badge" data-ref="11" data-title="Simple statistical gradient-following algorithms for connectionist">11</sup>.
 It is easy to demonstrate that this restriction can make some
@@ -91,7 +91,7 @@ after another like this:</p>
 <p>\begin{center}
 <table class="article-table">
   <thead><tr>
-    <th>{\bf Input}</th>
+    <th><strong>Input</strong></th>
     <th>1</th>
     <th>2</th>
     <th>5</th>
@@ -104,7 +104,7 @@ after another like this:</p>
   </tr></thead>
   <tbody>
   <tr>
-    <td>{\bf Output}</td>
+    <td><strong>Output</strong></td>
     <td>3</td>
     <td>5</td>
     <td>6</td>
@@ -132,7 +132,7 @@ demonstrated in~<sup class="ref-badge" data-ref="12" data-title="Neural GPUs lea
 literature (for instance, the Neural GPU from~<sup class="ref-badge" data-ref="12" data-title="Neural GPUs learn algorithms.">12</sup>),
 is to allow the model to access and change
 all its memory at each decoding step. We will call this mechanism
-an {\em active memory}. While it might seem more expensive
+an <em>active memory</em>. While it might seem more expensive
 than attention models, it is actually not, since
 the attention mechanism needs to compute an attention score for all its memory as well
 in order to focus on the most appropriate part. The approximate
@@ -448,9 +448,9 @@ so we only write <span class="math-inline"><span class="katex"><span class="kate
   Perplexity is computed on the test set with the ground truth provided,
   so it do not depend on the decoder.</caption>
   <thead><tr>
-    <th>{\bf Model}</th>
-    <th>{\bf Perplexity (log)}</th>
-    <th>{\bf BLEU}</th>
+    <th><strong>Model</strong></th>
+    <th><strong>Perplexity (log)</strong></th>
+    <th><strong>BLEU</strong></th>
   </tr></thead>
   <tbody>
   <tr>
