@@ -382,10 +382,11 @@ function extractBibliography(bibTex) {
     }
 
     // Deduplicate: remove entries with same title (keep first occurrence)
+    // Uses title only (not authors) so "X et al." vs full author list still dedupes
     const seen = new Set();
     const deduped = [];
     for (const ref of refs) {
-        const key = ref.title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 40);
+        const key = ref.title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 50);
         if (key && seen.has(key)) continue;
         if (key) seen.add(key);
         deduped.push(ref);
