@@ -98,11 +98,25 @@ function convertTexToHtml(mainTexPath) {
     // Clean up remaining LaTeX commands
     body = cleanRemainingLatex(body);
 
+    // Build key->num map for numeric citation display
+    const keyToNum = {};
+    refs.forEach((ref, i) => { keyToNum[ref.key] = i + 1; });
+
+    // Replace [key] style cite badges with numeric ones with data-title
+    body = body.replace(/<sup class="ref-badge" data-ref="([^"]+)">\[([^\]]+)\]<\/sup>/g, (_, key) => {
+        const ref = refs.find(r => r.key === key);
+        const num = keyToNum[key] || key;
+        const title = ref ? ref.title : key;
+        const arxivId = ref && ref.arxivId ? ` data-arxiv-id="${ref.arxivId}"` : '';
+        return `<sup class="ref-badge" data-ref="${num}" data-title="${escapeHtml(title)}"${arxivId}>${num}</sup>`;
+    });
+
     // Add reference section if we have refs
     if (refs.length > 0) {
         body += '\n<h2>References</h2>\n<ol class="references">\n';
-        refs.forEach(ref => {
-            body += `  <li id="ref-${ref.key}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
+        refs.forEach((ref, i) => {
+            const num = i + 1;
+            body += `  <li id="ref-${num}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
         });
         body += '</ol>\n';
     }
@@ -193,12 +207,14 @@ function convertMath(tex) {
         return `<div class="math-display"><span class="math-raw">${escapeHtml(math.trim())}</span></div>`;
     });
 
-    // align/align*
-    tex = tex.replace(/\\begin\{align\*?\}([\s\S]*?)\\end\{align\*?\}/g, (_, math) => {
-        // Split on \\ for multiple lines
-        const lines = math.split('\\\\').map(l => l.trim()).filter(l => l);
-        const formatted = lines.map(l => l.replace(/&/g, ' ')).join('\n');
-        return `<div class="math-display"><span class="math-raw">${escapeHtml(formatted)}</span></div>`;
+    // align/align*, eqnarray/eqnarray*, gather, multline
+    const displayEnvs = ['align\\*?', 'eqnarray\\*?', 'gather\\*?', 'multline\\*?', 'flalign\\*?'];
+    displayEnvs.forEach(env => {
+        tex = tex.replace(new RegExp(`\\\\begin\\{${env}\\}([\\s\\S]*?)\\\\end\\{${env}\\}`, 'g'), (_, math) => {
+            const lines = math.split('\\\\').map(l => l.trim()).filter(l => l);
+            const formatted = lines.map(l => l.replace(/&+/g, ' ')).join(' \\\\ ');
+            return `<div class="math-display"><span class="math-raw">${escapeHtml(formatted)}</span></div>`;
+        });
     });
 
     // Display math: $$...$$
@@ -372,13 +388,16 @@ function extractBibliography(bibTex) {
         // Clean up newblock
         content = content.replace(/\\newblock\s*/g, '');
 
+        // Try to extract arxiv ID
+        const arxivMatch = content.match(/arxiv[:\s/]*([0-9]{4}\.[0-9]{4,5})/i);
+
         // Extract parts
         const parts = content.split('\n').map(l => l.trim()).filter(l => l);
         const authors = cleanText(parts[0] || '');
         const title = cleanText(parts[1] || '');
         const venue = cleanText(parts.slice(2).join(' '));
 
-        refs.push({ key, authors, title, venue });
+        refs.push({ key, authors, title, venue, arxivId: arxivMatch ? arxivMatch[1] : '' });
     }
 
     return refs;

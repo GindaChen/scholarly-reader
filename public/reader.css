@@ -3223,3 +3223,34 @@ body.resizing {
     filter: brightness(1.15);
     transform: scale(1.05);
 }
+
+/* ── Chrome-style split view tabs ─────────────────────────── */
+.split-view-header {
+    cursor: grab;
+    user-select: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 10px;
+    background: var(--surface-2, #2a2a3c);
+    border-bottom: 2px solid transparent;
+    border-radius: 6px 6px 0 0;
+    transition: background 0.15s, border-color 0.15s;
+}
+.split-view-header:hover {
+    background: var(--surface-3, #35354a);
+    border-bottom-color: var(--accent, #7c6af7);
+}
+.split-view-header:active { cursor: grabbing; }
+.split-view.split-drag-placeholder {
+    flex-shrink: 0;
+    background: transparent;
+}
+.split-view {
+    transition: box-shadow 0.15s;
+}
+.split-view[style*="opacity: 0.4"],
+.split-view[style*="opacity:0.4"] {
+    box-shadow: 0 0 0 2px var(--accent, #7c6af7);
+    border-radius: 6px;
+}

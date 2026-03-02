@@ -2390,7 +2390,7 @@
         splitView.id = newId;
 
         splitView.innerHTML = `
-            <div class="split-view-header" draggable="true" style="cursor:grab;">
+            <div class="split-view-header" draggable="true" title="Drag to reorder">
                 <span class="split-title">${label || `Split View ${splitCount}`}</span>
                 <div class="split-view-actions">
                     <button class="btn-close-split" title="Close Split">
@@ -2570,51 +2570,70 @@
 
     /**
      * Post-process a newly loaded split content element:
-     * - Render raw LaTeX via KaTeX auto-render
-     * - Add ref-badge spans to inline [N] citations if not already present
+     * 1. Render <span class="math-raw"> via KaTeX
+     * 2. Build ref map from bibliography <li id="ref-N">
+     * 3. Convert [N] or [citationKey] plain text to clickable ref-badge spans
+     * 4. Wire ref-badge clicks to showRefDetail
      */
     function postProcessSplitContent(el) {
-        // KaTeX auto-render for any raw LaTeX
-        if (window.renderMathInElement) {
-            try {
-                renderMathInElement(el, {
-                    delimiters: [
-                        { left: '$$', right: '$$', display: true },
-                        { left: '$', right: '$', display: false },
-                        { left: '\\(', right: '\\)', display: false },
-                        { left: '\\[', right: '\\]', display: true },
-                    ],
-                    throwOnError: false,
-                });
-            } catch (e) { /* ignore render errors */ }
+        // --- 1. Render math-raw spans via KaTeX ---
+        if (window.katex) {
+            el.querySelectorAll('.math-raw').forEach(span => {
+                const raw = span.textContent || '';
+                const isDisplay = span.closest('.math-display') !== null;
+                try {
+                    const rendered = katex.renderToString(raw, {
+                        displayMode: isDisplay,
+                        throwOnError: false,
+                        trust: true,
+                    });
+                    const wrapper = document.createElement(isDisplay ? 'span' : 'span');
+                    wrapper.className = isDisplay ? 'katex-display' : 'katex-inline';
+                    wrapper.innerHTML = rendered;
+                    span.replaceWith(wrapper);
+                } catch (e) { /* leave as-is */ }
+            });
         }
 
-        // Build ref map from <li id="ref-N"> bibliography entries
-        const refMap = {};
-        el.querySelectorAll('li[id^="ref-"]').forEach(li => {
-            const num = li.id.replace('ref-', '');
+        // --- 2. Build ref map from <li id="ref-N"> or <li id="ref-key"> ---
+        const refMap = {}; // key/num -> { title, url, arxivId }
+        el.querySelectorAll('li[id^="ref-"]').forEach((li, idx) => {
+            const rawKey = li.id.replace('ref-', '');
+            const num = String(idx + 1);
             const arxivMatch = (li.textContent || '').match(/arxiv[:/]+(\d{4}\.\d{4,5}(?:v\d+)?)/i);
             const linkMatch = (li.innerHTML || '').match(/href="([^"]+)"/i);
-            refMap[num] = {
-                title: li.querySelector('strong,em')?.textContent?.trim() || `Reference ${num}`,
+            // Extract title: first <em> or second text chunk
+            const titleEl = li.querySelector('em') || li.querySelector('strong');
+            const title = titleEl
+                ? titleEl.textContent.trim()
+                : (li.textContent.split('.')[1] || '').trim() || `Reference ${rawKey}`;
+            const entry = {
+                title,
                 url: linkMatch ? linkMatch[1] : '',
                 arxivId: arxivMatch ? arxivMatch[1].split('v')[0] : '',
+                num,
             };
+            refMap[rawKey] = entry; // key-based lookup
+            refMap[num] = entry;    // numeric lookup
+            // Update li id to numeric for consistency
+            li.id = `ref-${num}`;
         });
 
-        if (Object.keys(refMap).length === 0) return; // nothing to annotate
+        if (Object.keys(refMap).length === 0) return;
 
-        // Walk text nodes and wrap [N] / [N,M] patterns with ref-badge spans
+        // --- 3. Walk text nodes and replace [key] or [N] with ref-badge spans ---
+        // Matches: [1], [ba2016layer], [1, 2], [key1, key2]
+        const citePat = /(\[[\w:.,\s-]{1,200}\])/g;
+
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
                 const parent = node.parentElement;
                 if (!parent) return NodeFilter.FILTER_REJECT;
                 const tag = parent.tagName;
-                // Skip script, style, already-processed badges, math
-                if (['SCRIPT','STYLE','SUP','MATH'].includes(tag)) return NodeFilter.FILTER_REJECT;
+                if (['SCRIPT','STYLE','SUP','MATH','CODE','PRE'].includes(tag)) return NodeFilter.FILTER_REJECT;
                 if (parent.classList.contains('ref-badge')) return NodeFilter.FILTER_REJECT;
-                if (parent.closest('.katex,.math-inline,.math-display')) return NodeFilter.FILTER_REJECT;
-                return /\[\d/.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                if (parent.closest('.katex,.math-inline,.math-display,.katex-display')) return NodeFilter.FILTER_REJECT;
+                return citePat.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
             }
         });
 
@@ -2624,87 +2643,142 @@
 
         nodes.forEach(node => {
             const frag = document.createDocumentFragment();
-            const parts = node.textContent.split(/(\[\d+(?:[,\s]+\d+)*\])/g);
-            parts.forEach(part => {
-                const m = part.match(/^\[(\d+(?:[,\s]+\d+)*)\]$/);
-                if (m) {
-                    const nums = m[1].split(/[,\s]+/);
-                    nums.forEach((num, i) => {
-                        const ref = refMap[num];
-                        if (!ref) { frag.appendChild(document.createTextNode(i === 0 ? part : '')); return; }
-                        const sup = document.createElement('sup');
-                        sup.className = 'ref-badge';
-                        sup.dataset.ref = num;
-                        sup.dataset.title = ref.title;
-                        sup.dataset.url = ref.url;
-                        if (ref.arxivId) sup.dataset.arxivId = ref.arxivId;
-                        sup.textContent = num;
-                        sup.style.cursor = 'pointer';
-                        sup.style.color = 'var(--accent, #7c6af7)';
-                        frag.appendChild(sup);
-                        if (i < nums.length - 1) frag.appendChild(document.createTextNode(','));
-                    });
-                } else {
-                    frag.appendChild(document.createTextNode(part));
+            let last = 0;
+            let m;
+            citePat.lastIndex = 0;
+            const text = node.textContent;
+            while ((m = citePat.exec(text)) !== null) {
+                if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                last = m.index + m[0].length;
+
+                // Parse keys inside brackets
+                const inner = m[1].slice(1, -1); // strip [ ]
+                const keys = inner.split(/[,\s]+/).map(k => k.trim()).filter(Boolean);
+                const matchedKeys = keys.filter(k => refMap[k]);
+
+                if (matchedKeys.length === 0) {
+                    frag.appendChild(document.createTextNode(m[1]));
+                    continue;
                 }
-            });
+
+                matchedKeys.forEach((key, i) => {
+                    const ref = refMap[key];
+                    const sup = document.createElement('sup');
+                    sup.className = 'ref-badge';
+                    sup.dataset.ref = ref.num;
+                    sup.dataset.title = ref.title;
+                    if (ref.url) sup.dataset.url = ref.url;
+                    if (ref.arxivId) sup.dataset.arxivId = ref.arxivId;
+                    sup.textContent = ref.num;
+                    sup.style.cursor = 'pointer';
+                    sup.style.color = 'var(--accent, #7c6af7)';
+                    frag.appendChild(sup);
+                    if (i < matchedKeys.length - 1) frag.appendChild(document.createTextNode('​'));
+                });
+            }
+            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
             node.parentNode.replaceChild(frag, node);
         });
 
-        // Wire up ref-badge clicks in the split to show ref detail panel
+        // --- 4. Wire clicks on existing + newly created ref-badges ---
         el.querySelectorAll('.ref-badge[data-ref]').forEach(badge => {
-            badge.addEventListener('click', () => showRefDetail(badge.dataset.ref));
+            badge.addEventListener('click', () => {
+                const num = badge.dataset.ref;
+                const ref = refMap[num];
+                // Temporarily inject into state.references so showRefDetail works
+                if (ref && !state.references[num]) {
+                    state.references[num] = { num: parseInt(num) || 0, title: ref.title, url: ref.url || '', quote: '' };
+                }
+                showRefDetail(num);
+            });
         });
     }
 
-    /** Enable drag-to-reorder split views by dragging their headers */
+    /**
+     * Chrome-style tab drag-to-reorder for split views.
+     * - Smooth placeholder indicator shows drop position
+     * - Tab header turns into a "detached" ghost while dragging
+     * - Drop snaps into exact position between panels
+     */
     function setupSplitDragReorder() {
         const container = $('#split-container');
         if (!container) return;
 
         let dragSrc = null;
+        let placeholder = null;
+
+        function createPlaceholder(width) {
+            const ph = document.createElement('div');
+            ph.className = 'split-view split-drag-placeholder';
+            ph.style.cssText = `width:${width}px;min-width:${width}px;opacity:0;border:2px dashed var(--accent,#7c6af7);border-radius:6px;pointer-events:none;transition:opacity 0.1s;`;
+            return ph;
+        }
 
         container.addEventListener('dragstart', e => {
             const header = e.target.closest('.split-view-header');
             if (!header) return;
             dragSrc = header.closest('.split-view');
-            dragSrc.style.opacity = '0.5';
+            const w = dragSrc.offsetWidth;
+
+            // Ghost image: just the header bar
+            const ghost = header.cloneNode(true);
+            ghost.style.cssText = `position:fixed;top:-9999px;left:0;width:${w}px;background:var(--surface-2,#2a2a3c);border-radius:6px 6px 0 0;padding:6px 12px;box-shadow:0 4px 16px rgba(0,0,0,0.4);`;
+            document.body.appendChild(ghost);
+            e.dataTransfer.setDragImage(ghost, w / 2, 20);
+            setTimeout(() => ghost.remove(), 0);
+
             e.dataTransfer.effectAllowed = 'move';
+
+            // Show placeholder
+            placeholder = createPlaceholder(w);
+            container.insertBefore(placeholder, dragSrc.nextSibling);
+            setTimeout(() => {
+                dragSrc.style.opacity = '0.4';
+                dragSrc.style.transition = 'opacity 0.15s';
+                placeholder.style.opacity = '1';
+            }, 0);
         });
 
         container.addEventListener('dragover', e => {
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
-            const target = e.target.closest('.split-view');
-            if (target && target !== dragSrc) {
-                target.style.outline = '2px dashed var(--accent, #7c6af7)';
-            }
-        });
+            if (!dragSrc || !placeholder) return;
 
-        container.addEventListener('dragleave', e => {
-            const target = e.target.closest('.split-view');
-            if (target) target.style.outline = '';
+            const splits = [...container.querySelectorAll('.split-view:not(.split-drag-placeholder)')];
+            let insertBefore = null;
+
+            for (const sv of splits) {
+                if (sv === dragSrc) continue;
+                const rect = sv.getBoundingClientRect();
+                const mid = rect.left + rect.width / 2;
+                if (e.clientX < mid) { insertBefore = sv; break; }
+            }
+
+            if (insertBefore) {
+                container.insertBefore(placeholder, insertBefore);
+            } else {
+                container.appendChild(placeholder);
+            }
         });
 
         container.addEventListener('drop', e => {
             e.preventDefault();
-            const target = e.target.closest('.split-view');
-            if (!target || target === dragSrc) return;
-            target.style.outline = '';
-            // Swap positions
-            const allSplits = [...container.querySelectorAll('.split-view')];
-            const srcIdx = allSplits.indexOf(dragSrc);
-            const tgtIdx = allSplits.indexOf(target);
-            if (srcIdx < tgtIdx) {
-                container.insertBefore(dragSrc, target.nextSibling);
-            } else {
-                container.insertBefore(dragSrc, target);
-            }
+            if (!dragSrc || !placeholder) return;
+            container.insertBefore(dragSrc, placeholder);
+            placeholder.remove();
+            placeholder = null;
+            dragSrc.style.opacity = '';
+            dragSrc.style.transition = '';
+            dragSrc = null;
         });
 
-        container.addEventListener('dragend', e => {
-            if (dragSrc) { dragSrc.style.opacity = ''; dragSrc = null; }
-            container.querySelectorAll('.split-view').forEach(sv => sv.style.outline = '');
+        container.addEventListener('dragend', () => {
+            if (placeholder) { placeholder.remove(); placeholder = null; }
+            if (dragSrc) {
+                dragSrc.style.opacity = '';
+                dragSrc.style.transition = '';
+                dragSrc = null;
+            }
         });
     }
 
