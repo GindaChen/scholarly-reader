@@ -180,14 +180,14 @@ function processSection(content) {
     // Strip LaTeX comments
     result = result.replace(/(?<!\\)%.*$/gm, '');
 
-    // Convert subsections
-    result = result.replace(/\\subsection\*?\{([^}]+)\}/g, '### $1');
-    result = result.replace(/\\subsubsection\*?\{([^}]+)\}/g, '#### $1');
+    // Convert subsections to HTML headings
+    result = result.replace(/\\subsection\*?\{([^}]+)\}/g, '<h3>$1</h3>');
+    result = result.replace(/\\subsubsection\*?\{([^}]+)\}/g, '<h4>$1</h4>');
 
     // Convert formatting
-    result = result.replace(/\\textbf\{([^}]+)\}/g, '**$1**');
-    result = result.replace(/\\textit\{([^}]+)\}/g, '*$1*');
-    result = result.replace(/\\emph\{([^}]+)\}/g, '*$1*');
+    result = result.replace(/\\textbf\{([^}]+)\}/g, '<strong>$1</strong>');
+    result = result.replace(/\\textit\{([^}]+)\}/g, '<em>$1</em>');
+    result = result.replace(/\\emph\{([^}]+)\}/g, '<em>$1</em>');
     result = result.replace(/\\url\{([^}]+)\}/g, '[$1]($1)');
     result = result.replace(/\\paragraph\{([^}]+)\}/g, '**$1.**');
     result = result.replace(/~(?!\\)/g, ' ');
@@ -304,6 +304,13 @@ function assembleHtml(meta, sections, figures, bibliography, outputDir) {
         });
         html += '</ol>\n';
     }
+
+    // Final pass: convert any surviving markdown syntax to HTML
+    html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+    html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
 
     return html;
 }
