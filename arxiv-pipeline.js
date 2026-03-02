@@ -24,7 +24,7 @@ const TEMP_DIR = path.join(__dirname, 'docs', '.arxiv-tmp');
 const PROMPT_PATH = path.join(__dirname, 'prompts', 'annotate-section.md');
 
 // Import tools
-const { renderAllMath } = require('./tools/render-math');
+const { renderAllMath, setCustomMacros, extractKatexMacros } = require('./tools/render-math');
 const { extractFigures, replaceFiguresInText } = require('./tools/extract-figures');
 const { convertTables } = require('./tools/convert-tables');
 const { collectLabels, resolveRefs } = require('./tools/resolve-refs');
@@ -134,6 +134,30 @@ function extractSections(body) {
     return sections;
 }
 
+// ─── Citation normalization ─────────────────────────────────
+
+/**
+ * Normalize various citation patterns to \cite{key} BEFORE any other processing.
+ * Handles: \mbox{\cite{key}}, \mbox{[key]}, ~\mbox{[key]}, ~[key], \citep{}, \citet{}
+ */
+function normalizeCitations(tex) {
+    // \mbox{\cite{key}} → \cite{key}  (unwrap mbox around cite)
+    tex = tex.replace(/\\mbox\{(\\cite[pt]?\{[^}]+\})\}/g, '$1');
+
+    // ~\mbox{[key]} → \cite{key}
+    tex = tex.replace(/~?\\mbox\{\[([^\]]+)\]\}/g, (_, key) => {
+        return '\\cite{' + key + '}';
+    });
+
+    // ~[key] → \cite{key} (but not inside math or existing commands)
+    // Be careful: only match ~ followed by [key] where key looks like a citation key
+    tex = tex.replace(/~\[([A-Za-z][A-Za-z0-9_:.-]*(?:,\s*[A-Za-z][A-Za-z0-9_:.-]*)*)\]/g, (_, keys) => {
+        return '\\cite{' + keys + '}';
+    });
+
+    return tex;
+}
+
 // ─── Stage 3: Process with tools ────────────────────────────
 
 function processSection(content) {
@@ -164,7 +188,10 @@ function processSection(content) {
         return items.split('\\item').filter(s => s.trim()).map(item => `${++n}. ${item.trim()}`).join('\n');
     });
 
-    // Convert citations
+    // Unwrap remaining \mbox{text} (non-citation uses, e.g. cross-refs)
+    result = result.replace(/\\mbox\{([^}]*)\}/g, '$1');
+
+    // Convert citations: \cite{key}, \citep{key}, \citet{key} → [key]
     result = result.replace(/\\cite[pt]?\{([^}]+)\}/g, (_, keys) => {
         return keys.split(',').map(k => `[${k.trim()}]`).join('');
     });
@@ -178,7 +205,7 @@ async function annotateWithLLM(sections, bibliography, onProgress) {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
         console.warn('[4/5] No OPENAI_API_KEY — using mechanical + tool-enhanced conversion');
-        return null; // Will be handled by processSection + tools
+        return null;
     }
 
     const OpenAI = require('openai');
@@ -223,7 +250,7 @@ Output ONLY the Markdown — no code fences, no explanation. Start with the ## h
             annotatedSections.push(response.choices[0].message.content.trim());
         } catch (err) {
             console.error(`[4/5] LLM error on section ${sec.title}: ${err.message}`);
-            annotatedSections.push(null); // Will fall back
+            annotatedSections.push(null);
         }
     }
 
@@ -232,7 +259,7 @@ Output ONLY the Markdown — no code fences, no explanation. Start with the ## h
 
 // ─── Stage 5: Assemble ──────────────────────────────────────
 
-function assembleHtml(meta, sections, figures, outputDir) {
+function assembleHtml(meta, sections, figures, bibliography, outputDir) {
     let html = '';
 
     // Title + metadata
@@ -254,16 +281,71 @@ function assembleHtml(meta, sections, figures, outputDir) {
         html += sec.html + '\n\n<hr>\n\n';
     }
 
-    // References
-    html += '<h2>References</h2>\n<ol class="references">\n';
-    // (references are embedded in sections via citations)
-    html += '</ol>\n';
+    // References from bibliography
+    if (bibliography.length > 0) {
+        html += '<h2>References</h2>\n<ol class="references">\n';
+        bibliography.forEach((ref, i) => {
+            const num = i + 1;
+            html += `  <li id="ref-${num}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
+        });
+        html += '</ol>\n';
+    }
 
     return html;
 }
 
 function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/**
+ * Extract bibliography entries from \begin{thebibliography}...\end{thebibliography}
+ */
+function extractBibliography(bibTex) {
+    const refs = [];
+    const items = bibTex.split('\\bibitem');
+
+    for (let i = 1; i < items.length; i++) {
+        let item = items[i].trim();
+        // Handle \bibitem[label]{key} or \bibitem{key}
+        let key;
+        if (item.startsWith('[')) {
+            const closeBracket = item.indexOf(']');
+            item = item.substring(closeBracket + 1).trim();
+        }
+        if (item.startsWith('{')) {
+            const closeBrace = item.indexOf('}');
+            key = item.substring(1, closeBrace);
+            item = item.substring(closeBrace + 1).trim();
+        } else {
+            continue;
+        }
+
+        let content = item;
+        // Clean up newblock
+        content = content.replace(/\\newblock\s*/g, '');
+        // Remove LaTeX formatting
+        content = content.replace(/\\emph\{([^}]+)\}/g, '$1');
+        content = content.replace(/\\textit\{([^}]+)\}/g, '$1');
+        content = content.replace(/\\textbf\{([^}]+)\}/g, '$1');
+        content = content.replace(/\{\\em\s+([^}]+)\}/g, '$1');
+        content = content.replace(/\\url\{([^}]+)\}/g, '$1');
+        content = content.replace(/[{}]/g, '');
+        content = content.replace(/~(?!\\)/g, ' ');
+
+        // Try to extract arxiv ID
+        const arxivMatch = content.match(/arxiv[:\s/]*([0-9]{4}\.[0-9]{4,5})/i);
+
+        // Extract parts — split on periods followed by newlines or double spaces
+        const parts = content.split('\n').map(l => l.trim()).filter(l => l);
+        const authors = parts[0] || '';
+        const title = parts[1] || '';
+        const venue = parts.slice(2).join(' ');
+
+        refs.push({ key, authors, title, venue, arxivId: arxivMatch ? arxivMatch[1] : '' });
+    }
+
+    return refs;
 }
 
 // ─── Main Pipeline ──────────────────────────────────────────
@@ -278,7 +360,24 @@ async function importArxiv(arxivId, onProgress) {
     // Stage 2: Parse
     progress('Parsing TeX structure...');
     const mainFile = findMainTexFile(tmpDir);
-    const fullTex = resolveInputs(mainFile, tmpDir);
+    let fullTex = resolveInputs(mainFile, tmpDir);
+
+    // Also resolve .bbl file (compiled bibliography) — inline it so extractBibliography works
+    const bblFiles = fs.readdirSync(tmpDir).filter(f => f.endsWith('.bbl'));
+    for (const bblFile of bblFiles) {
+        const bblContent = fs.readFileSync(path.join(tmpDir, bblFile), 'utf-8');
+        // If the tex has \bibliography{...} but no \begin{thebibliography}, append .bbl content
+        if (!fullTex.includes('\\begin{thebibliography}') && bblContent.includes('\\begin{thebibliography}')) {
+            // Insert before \end{document} or append
+            const endDocIdx = fullTex.lastIndexOf('\\end{document}');
+            if (endDocIdx !== -1) {
+                fullTex = fullTex.substring(0, endDocIdx) + '\n' + bblContent + '\n' + fullTex.substring(endDocIdx);
+            } else {
+                fullTex += '\n' + bblContent;
+            }
+            console.log('[2/5] Inlined .bbl file: ' + bblFile);
+        }
+    }
 
     const docMatch = fullTex.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
     const body = docMatch ? docMatch[1] : fullTex;
@@ -286,9 +385,22 @@ async function importArxiv(arxivId, onProgress) {
     const meta = extractMetadata(fullTex);
     const sections = extractSections(body);
     const bibMatch = body.match(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/);
-    const bibliography = bibMatch ? bibMatch[0] : '';
+    const bibRaw = bibMatch ? bibMatch[0] : '';
+    const bibliography = bibRaw ? extractBibliography(bibRaw) : [];
 
     console.log(`[2/5] Found ${sections.length} sections: ${sections.map(s => s.title).join(', ')}`);
+    console.log(`[2/5] Found ${bibliography.length} bibliography entries`);
+
+    // Extract custom macros from preamble and set them for KaTeX
+    const preamble = fullTex.match(/([\s\S]*?)\\begin\{document\}/);
+    const preambleText = preamble ? preamble[1] : '';
+    const katexMacros = extractKatexMacros(preambleText);
+    setCustomMacros(katexMacros);
+    console.log(`[2/5] Extracted ${Object.keys(katexMacros).length} custom macros for KaTeX`);
+
+    // Build citation key→number map for ref badges
+    const keyToNum = {};
+    bibliography.forEach((ref, i) => { keyToNum[ref.key] = i + 1; });
 
     // Create output folder
     const slug = cleanId.replace(/\./g, '-');
@@ -311,6 +423,12 @@ async function importArxiv(arxivId, onProgress) {
     for (const sec of sections) {
         let content = sec.content;
 
+        // Normalize citations FIRST (before any other processing)
+        content = normalizeCitations(content);
+
+        // Strip the bibliography block from section content if present
+        content = content.replace(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/g, '');
+
         // Basic LaTeX → Markdown conversion
         content = processSection(content);
 
@@ -320,11 +438,29 @@ async function importArxiv(arxivId, onProgress) {
         // Convert tables
         content = convertTables(content, 'html');
 
-        // Resolve cross-references
+        // Resolve cross-references (but strip \label from math envs first)
         content = resolveRefs(content, labels);
 
-        // Render math with KaTeX
+        // Render math with KaTeX (AFTER resolve-refs, which may insert <span> anchors)
+        // render-math.js now strips HTML tags from inside math before KaTeX rendering
         content = renderAllMath(content);
+
+        // Convert \cite{key} / [key] citation markers to ref-badge HTML
+        // Handle both \cite{key} and [key] patterns that survived processing
+        content = content.replace(/\[([A-Za-z][A-Za-z0-9_:.-]*(?:,\s*[A-Za-z][A-Za-z0-9_:.-]*)*)\]/g, (match, keys) => {
+            const parts = keys.split(',').map(k => k.trim());
+            // Only convert if at least one key matches a known bibliography entry
+            const anyMatch = parts.some(k => keyToNum[k]);
+            if (!anyMatch) return match; // Leave non-citation brackets alone
+
+            return parts.map(k => {
+                const num = keyToNum[k] || k;
+                const ref = bibliography.find(r => r.key === k);
+                const title = ref ? ref.title : k;
+                const arxivAttr = ref && ref.arxivId ? ` data-arxiv-id="${ref.arxivId}"` : '';
+                return `<sup class="ref-badge" data-ref="${num}" data-title="${escapeHtml(title)}"${arxivAttr}>${num}</sup>`;
+            }).join('');
+        });
 
         // Wrap paragraphs
         content = content
@@ -346,13 +482,11 @@ async function importArxiv(arxivId, onProgress) {
 
     // Stage 4: LLM Annotation (optional)
     progress('LLM annotation phase...');
-    const llmSections = await annotateWithLLM(sections, bibliography, progress);
-    // If LLM produced results, we could merge them, but for now the tool-processed version
-    // is the primary output since it has rendered math and figures
+    const llmSections = await annotateWithLLM(sections, bibRaw, progress);
 
     // Stage 5: Assemble
     progress('Assembling document...');
-    const html = assembleHtml(meta, processedSections, figures, outputDir);
+    const html = assembleHtml(meta, processedSections, figures, bibliography, outputDir);
 
     // Write paper.html
     fs.writeFileSync(path.join(outputDir, 'paper.html'), html, 'utf-8');
@@ -373,7 +507,7 @@ async function importArxiv(arxivId, onProgress) {
         archive: 'arxiv',
         archive_url: `https://arxiv.org/abs/${cleanId}`,
         source: 'arxiv-pipeline',
-        pipeline_version: '2.0',
+        pipeline_version: '2.1',
         tags: ['auto-imported', 'arxiv-pipeline'],
         abstract: meta.abstract.substring(0, 500),
         files: [
@@ -381,7 +515,7 @@ async function importArxiv(arxivId, onProgress) {
         ],
         variable_count: 0,
         equation_count: processedSections.reduce((n, s) => n + (s.html.match(/math-display/g) || []).length, 0),
-        reference_count: bibliography ? (bibliography.match(/\\bibitem/g) || []).length : 0,
+        reference_count: bibliography.length,
         sections: sections.length,
         figures: figures.length,
     };

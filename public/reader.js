@@ -1583,9 +1583,11 @@
             document.body.classList.add('resizing');
 
             const onMove = (e) => {
-                const delta = startX - e.clientX;
-                const newWidth = Math.min(Math.max(startWidth + delta, 200), 700);
-                panelRefs.style.width = `${newWidth}px`;
+                requestAnimationFrame(() => {
+                    const delta = startX - e.clientX;
+                    const newWidth = Math.min(Math.max(startWidth + delta, 200), 700);
+                    panelRefs.style.width = `${newWidth}px`;
+                });
             };
             const onUp = () => {
                 handle.classList.remove('dragging');

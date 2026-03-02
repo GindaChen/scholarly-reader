@@ -33,10 +33,52 @@ const VAR_COLORS = {
     b: '#ffd700', x: '#98c379', n: '#c678dd',
 };
 
+// Stored custom macros (set by pipeline before rendering)
+let _customMacros = {};
+
+/**
+ * Set custom macros extracted from TeX preamble (called by pipeline)
+ */
+function setCustomMacros(macros) {
+    _customMacros = macros || {};
+}
+
+/**
+ * Extract KaTeX-compatible macros from TeX \newcommand and \def definitions
+ */
+function extractKatexMacros(texSource) {
+    const macros = {};
+
+    // Match \newcommand{\name}[args]{replacement} and \newcommand{\name}{replacement}
+    const ncRe = /\\newcommand\{?\\(\w+)\}?(?:\[(\d+)\])?\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}/g;
+    let m;
+    while ((m = ncRe.exec(texSource)) !== null) {
+        const name = m[1];
+        const numArgs = parseInt(m[2] || '0');
+        const replacement = m[3];
+        // KaTeX handles #1, #2 etc natively in macro definitions
+        macros['\\' + name] = replacement;
+    }
+
+    // Match \def\name{replacement} (zero-arg only)
+    const defRe = /\\def\\(\w+)\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}/g;
+    while ((m = defRe.exec(texSource)) !== null) {
+        macros['\\' + m[1]] = m[2];
+    }
+
+    // Match \DeclareMathOperator{\name}{text}
+    const dmoRe = /\\DeclareMathOperator\{\\(\w+)\}\{([^}]+)\}/g;
+    while ((m = dmoRe.exec(texSource)) !== null) {
+        macros['\\' + m[1]] = '\\operatorname{' + m[2] + '}';
+    }
+
+    return macros;
+}
+
 /**
  * Render a LaTeX math string to HTML using KaTeX
  */
-function renderMath(latex, displayMode = false) {
+function renderMath(latex, displayMode = false, extraMacros = {}) {
     try {
         // Clean common LaTeX issues
         let clean = latex.trim();
@@ -44,23 +86,30 @@ function renderMath(latex, displayMode = false) {
         clean = clean.replace(/\\tag\{[^}]*\}/g, '');
         clean = clean.replace(/\\nonumber/g, '');
 
+        // Strip HTML tags that leaked into math (e.g., <span> label anchors)
+        clean = clean.replace(/<[^>]+>/g, '');
+        // Unescape HTML entities that may have been escaped
+        clean = clean.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+
+        const defaultMacros = {
+            '\\R': '\\mathbb{R}',
+            '\\N': '\\mathbb{N}',
+            '\\Z': '\\mathbb{Z}',
+            '\\softmax': '\\text{softmax}',
+            '\\Attention': '\\text{Attention}',
+            '\\MultiHead': '\\text{MultiHead}',
+            '\\FFN': '\\text{FFN}',
+            '\\LayerNorm': '\\text{LayerNorm}',
+            '\\Concat': '\\text{Concat}',
+            '\\head': '\\text{head}',
+        };
+
         return katex.renderToString(clean, {
             displayMode,
             throwOnError: false,
             trust: true,
             strict: false,
-            macros: {
-                '\\R': '\\mathbb{R}',
-                '\\N': '\\mathbb{N}',
-                '\\Z': '\\mathbb{Z}',
-                '\\softmax': '\\text{softmax}',
-                '\\Attention': '\\text{Attention}',
-                '\\MultiHead': '\\text{MultiHead}',
-                '\\FFN': '\\text{FFN}',
-                '\\LayerNorm': '\\text{LayerNorm}',
-                '\\Concat': '\\text{Concat}',
-                '\\head': '\\text{head}',
-            },
+            macros: { ...defaultMacros, ..._customMacros, ...extraMacros },
         });
     } catch (e) {
         // Return raw LaTeX in a styled span on failure
@@ -106,7 +155,6 @@ function renderAllMath(text, varDescriptions = {}) {
         (match, env, content) => {
             let lines;
             if (env === 'align') {
-                // Split align into separate lines
                 lines = content.split('\\\\').map(l => l.replace(/&/g, ' ').trim()).filter(l => l);
             } else {
                 lines = [content.trim()];
@@ -132,9 +180,9 @@ function renderAllMath(text, varDescriptions = {}) {
         }
     );
 
-    // 3. Inline math: $...$ (single dollar)
+    // 3. Inline math: $...$ (single dollar) — don't match across line breaks
     result = result.replace(
-        /(?<!\$)\$(?!\$)((?:[^$\\]|\\.)+?)\$/g,
+        /(?<!\$)\$(?!\$)((?:[^$\\\n]|\\.)+?)\$/g,
         (_, content) => {
             let html = renderMath(content.trim(), false);
             html = annotateVarsInMath(html, varDescriptions);
@@ -153,4 +201,4 @@ function escapeRegex(str) {
     return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-module.exports = { renderMath, renderAllMath, annotateVarsInMath };
+module.exports = { renderMath, renderAllMath, annotateVarsInMath, setCustomMacros, extractKatexMacros };

@@ -69,6 +69,14 @@ function convertTexToHtml(mainTexPath) {
     // Convert math environments
     body = convertMath(body);
 
+    // Normalize citation patterns before formatting strips ~
+    // \mbox{\cite{key}} → \cite{key}
+    body = body.replace(/\\mbox\{(\\cite[pt]?\{[^}]+\})\}/g, '$1');
+    // ~\mbox{[key]} and \mbox{[key]} → \cite{key}
+    body = body.replace(/~?\\mbox\{\[([^\]]+)\]\}/g, (_, key) => '\\cite{' + key + '}');
+    // ~[key] where key looks like citation → \cite{key}
+    body = body.replace(/~\[([A-Za-z][A-Za-z0-9_:.-]*)\]/g, (_, key) => '\\cite{' + key + '}');
+
     // Convert formatting
     body = convertFormatting(body);
 
