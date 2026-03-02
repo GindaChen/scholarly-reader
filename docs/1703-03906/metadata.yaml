@@ -1,0 +1,33 @@
+title: Massive Exploration of Neural Machine Translation Architectures
+short_title: Massive Exploration of Neural Machine Tr…
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1703.03906
+pdf: https://arxiv.org/pdf/1703.03906
+arxiv_id: '1703.03906'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1703.03906
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Neural Machine Translation (NMT) has shown remarkable progress over the 
+      past few years with production systems now being deployed 
+      to end-users. One major drawback of current architectures
+      is that they are expensive to train, typically requiring days to weeks of GPU
+      time to converge. This makes exhaustive hyperparameter search,
+      as is commonly done with other neural network architectures, prohibitively expensive. In this work, we present the first large-scale analysis of
+      
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 9
+reference_count: 24
+sections: 6
+figures: 2

@@ -95,14 +95,29 @@ function convertTexToHtml(mainTexPath) {
         body = body.replace(bibMatch[0], '');
     }
 
+    // Build key→number map for citation resolution
+    const keyToNum = {};
+    refs.forEach((ref, i) => { keyToNum[ref.key] = i + 1; });
+
     // Clean up remaining LaTeX commands
     body = cleanRemainingLatex(body);
 
+    // Resolve string citation keys to numeric ref badges with titles
+    body = body.replace(/<sup class="ref-badge" data-ref="([^"0-9][^"]*)"[^>]*>\[([^\]]+)\]<\/sup>/g, (_, key) => {
+        const num = keyToNum[key];
+        if (!num) return `<sup class="ref-badge" data-ref="${key}">[${key}]</sup>`;
+        const ref = refs.find(r => r.key === key);
+        const title = ref ? ref.title.replace(/"/g, '&quot;') : key;
+        const arxivMatch = ref && ref.venue ? ref.venue.match(/arXiv[:\s]*(\d{4}\.\d{4,5})/i) : null;
+        const arxivAttr = arxivMatch ? ` data-arxiv-id="${arxivMatch[1]}"` : '';
+        return `<sup class="ref-badge" data-ref="${num}" data-title="${title}"${arxivAttr}>${num}</sup>`;
+    });
+
     // Add reference section if we have refs
     if (refs.length > 0) {
-        body += '\n<h2>References</h2>\n<ol class="references">\n';
-        refs.forEach(ref => {
-            body += `  <li id="ref-${ref.key}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
+        body += '\n<h2>References</h2>\n<ol class="bibliography">\n';
+        refs.forEach((ref, i) => {
+            body += `  <li id="ref-${i + 1}"><strong>${ref.authors}</strong> ${ref.title}. <em>${ref.venue}</em></li>\n`;
         });
         body += '</ol>\n';
     }

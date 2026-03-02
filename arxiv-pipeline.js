@@ -73,6 +73,7 @@ function findMainTexFile(dir) {
 
 function resolveInputs(filePath, baseDir) {
     let content = fs.readFileSync(filePath, 'utf-8');
+    // Resolve \input{file} recursively
     content = content.replace(/\\input\{([^}]+)\}/g, (_, filename) => {
         let inputPath = path.join(baseDir, filename);
         if (!inputPath.endsWith('.tex')) inputPath += '.tex';
@@ -80,6 +81,21 @@ function resolveInputs(filePath, baseDir) {
             return resolveInputs(inputPath, baseDir);
         } catch {
             return `% Could not resolve \\input{${filename}}`;
+        }
+    });
+    // Inline \bibliography{name} → content of name.bbl (if present)
+    content = content.replace(/\\bibliography\{([^}]+)\}/g, (match, name) => {
+        const bblPath = path.join(baseDir, name + '.bbl');
+        try {
+            return fs.readFileSync(bblPath, 'utf-8');
+        } catch {
+            // Try any .bbl file in baseDir as fallback
+            try {
+                const bblFiles = fs.readdirSync(baseDir).filter(f => f.endsWith('.bbl'));
+                if (bblFiles.length > 0)
+                    return fs.readFileSync(path.join(baseDir, bblFiles[0]), 'utf-8');
+            } catch {}
+            return match; // leave unchanged if not found
         }
     });
     return content;
@@ -181,9 +197,12 @@ function processSection(content) {
         return items.split('\\item').filter(s => s.trim()).map(item => `${++n}. ${item.trim()}`).join('\n');
     });
 
-    // Convert citations
-    result = result.replace(/\\cite[pt]?\{([^}]+)\}/g, (_, keys) => {
-        return keys.split(',').map(k => `[${k.trim()}]`).join('');
+    // Convert citations → ref-badge placeholders (keys resolved to numbers in assembleHtml)
+    result = result.replace(/\\cite[tp]?(?:\[[^\]]*\])?\{([^}]+)\}/g, (_, keys) => {
+        return keys.split(',').map(k => {
+            const key = k.trim();
+            return `<sup class="ref-badge" data-ref="${key}">[${key}]</sup>`;
+        }).join('');
     });
 
     return result;
@@ -249,7 +268,7 @@ Output ONLY the Markdown — no code fences, no explanation. Start with the ## h
 
 // ─── Stage 5: Assemble ──────────────────────────────────────
 
-function assembleHtml(meta, sections, figures, outputDir) {
+function assembleHtml(meta, sections, figures, outputDir, bibRaw) {
     let html = '';
 
     // Title + metadata
@@ -271,10 +290,64 @@ function assembleHtml(meta, sections, figures, outputDir) {
         html += sec.html + '\n\n<hr>\n\n';
     }
 
-    // References
-    html += '<h2>References</h2>\n<ol class="references">\n';
-    // (references are embedded in sections via citations)
-    html += '</ol>\n';
+    // Parse bibliography and build key→number map
+    // Handles both \bibitem{key} and \bibitem[label]{key} formats
+    const bibEntries = [];
+    if (bibRaw) {
+        const bibItemRe = /\\bibitem(?:\[[^\]]*\])?\{([^}]+)\}((?:(?!\\bibitem)[\s\S])*)/g;
+        let bm;
+        while ((bm = bibItemRe.exec(bibRaw)) !== null) {
+            const key = bm[1].trim();
+            const body = bm[2]
+                .replace(/\\newblock\s*/g, ' ')
+                .replace(/\\natexlab\{[^}]*\}/g, '')
+                .replace(/\\emph\{([^}]*)\}/g, '$1')
+                .replace(/\{\\em\s+([^}]*)\}/g, '$1')
+                .replace(/\\textit\{([^}]*)\}/g, '$1')
+                .replace(/[{}]/g, '')
+                .replace(/~(?!\\)/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            // Split on double-newline or period-newline to find authors/title/venue
+            const parts = body.split(/\n\s*\n|(?<=\.)\s*\n/).map(s => s.trim()).filter(Boolean);
+            const authors = parts[0] || '';
+            const title = parts[1] || '';
+            const venue = parts.slice(2).join(' ');
+            bibEntries.push({ key, authors, title, venue });
+        }
+    }
+    // Deduplicate by title
+    const seenTitles = new Set();
+    const dedupedBib = bibEntries.filter(e => {
+        const k = e.title.toLowerCase().replace(/[^a-z0-9]/g,'').substring(0,50);
+        if (k && seenTitles.has(k)) return false;
+        if (k) seenTitles.add(k);
+        return true;
+    });
+
+    // Build keyToNum map
+    const keyToNum = {};
+    dedupedBib.forEach((e, i) => { keyToNum[e.key] = i + 1; });
+
+    // Resolve all data-ref="key" → data-ref="num" with title in the assembled html
+    html = html.replace(/<sup class="ref-badge" data-ref="([^"0-9][^"]*)"[^>]*>\[([^\]]+)\]<\/sup>/g, (_, key) => {
+        const num = keyToNum[key];
+        if (!num) return '';  // unknown key — drop silently
+        const entry = dedupedBib.find(e => e.key === key);
+        const title = entry ? entry.title.replace(/"/g, '&quot;') : key;
+        const arxivMatch = entry && entry.venue ? entry.venue.match(/arXiv[:\s]*(\d{4}\.\d{4,5})/i) : null;
+        const arxivAttr = arxivMatch ? ` data-arxiv-id="${arxivMatch[1]}"` : '';
+        return `<sup class="ref-badge" data-ref="${num}" data-title="${title}"${arxivAttr}>${num}</sup>`;
+    });
+
+    // Render bibliography list
+    if (dedupedBib.length > 0) {
+        html += '<h2>References</h2>\n<ol class="bibliography">\n';
+        dedupedBib.forEach((e, i) => {
+            html += `  <li id="ref-${i+1}"><strong>${e.authors}</strong> ${e.title}. <em>${e.venue}</em></li>\n`;
+        });
+        html += '</ol>\n';
+    }
 
     return html;
 }
@@ -297,12 +370,23 @@ async function importArxiv(arxivId, onProgress) {
     const mainFile = findMainTexFile(tmpDir);
     const fullTex = resolveInputs(mainFile, tmpDir);
 
-    const docMatch = fullTex.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
-    const body = docMatch ? docMatch[1] : fullTex;
+    // Inline .bbl file if bibliography is external (\bibliography{...})
+    let resolvedTex = fullTex;
+    if (!fullTex.includes('\\begin{thebibliography}')) {
+        const bblFiles = fs.readdirSync(tmpDir).filter(f => f.endsWith('.bbl'));
+        for (const bblFile of bblFiles) {
+            const bblContent = fs.readFileSync(path.join(tmpDir, bblFile), 'utf-8');
+            resolvedTex += '\n' + bblContent;
+            console.log(`[2/5] Inlined .bbl file: ${bblFile}`);
+        }
+    }
 
-    const meta = extractMetadata(fullTex);
+    const docMatch = resolvedTex.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
+    const body = docMatch ? docMatch[1] : resolvedTex;
+
+    const meta = extractMetadata(resolvedTex);
     const sections = extractSections(body);
-    const bibMatch = body.match(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/);
+    const bibMatch = resolvedTex.match(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/);
     const bibliography = bibMatch ? bibMatch[0] : '';
 
     console.log(`[2/5] Found ${sections.length} sections: ${sections.map(s => s.title).join(', ')}`);
@@ -369,7 +453,7 @@ async function importArxiv(arxivId, onProgress) {
 
     // Stage 5: Assemble
     progress('Assembling document...');
-    const html = assembleHtml(meta, processedSections, figures, outputDir);
+    const html = assembleHtml(meta, processedSections, figures, outputDir, bibliography);
 
     // Write paper.html
     fs.writeFileSync(path.join(outputDir, 'paper.html'), html, 'utf-8');
