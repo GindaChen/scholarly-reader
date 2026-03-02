@@ -197,8 +197,11 @@ function processSection(content) {
         return items.split('\\item').filter(s => s.trim()).map(item => `${++n}. ${item.trim()}`).join('\n');
     });
 
-    // Convert citations → ref-badge placeholders (keys resolved to numbers in assembleHtml)
-    result = result.replace(/\\cite[tp]?(?:\[[^\]]*\])?\{([^}]+)\}/g, (_, keys) => {
+    // Strip ~ (non-breaking space) before \cite
+    result = result.replace(/~(?=\\cite)/g, ' ');
+    // Convert all \cite variants → ref-badge placeholders
+    // Handles \cite, \citep, \citet, \citealp, \citealt, \citeyear, \citenum + optional [note]
+    result = result.replace(/\\cite[a-zA-Z]*(?:\[[^\]]*\])?\{([^}]+)\}/g, (_, keys) => {
         return keys.split(',').map(k => {
             const key = k.trim();
             return `<sup class="ref-badge" data-ref="${key}">[${key}]</sup>`;
@@ -330,6 +333,8 @@ function assembleHtml(meta, sections, figures, outputDir, bibRaw) {
     dedupedBib.forEach((e, i) => { keyToNum[e.key] = i + 1; });
 
     // Resolve all data-ref="key" → data-ref="num" with title in the assembled html
+    // Also strip stray ~ that might precede citation badges
+    html = html.replace(/~(<sup class="ref-badge")/g, ' $1');
     html = html.replace(/<sup class="ref-badge" data-ref="([^"0-9][^"]*)"[^>]*>\[([^\]]+)\]<\/sup>/g, (_, key) => {
         const num = keyToNum[key];
         if (!num) return '';  // unknown key — drop silently
@@ -382,12 +387,15 @@ async function importArxiv(arxivId, onProgress) {
     }
 
     const docMatch = resolvedTex.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
-    const body = docMatch ? docMatch[1] : resolvedTex;
+    let body = docMatch ? docMatch[1] : resolvedTex;
+
+    // Extract and remove thebibliography from body before section parsing
+    const bibMatch = body.match(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/);
+    const bibliography = bibMatch ? bibMatch[0] : '';
+    if (bibMatch) body = body.replace(bibMatch[0], ''); // strip from body
 
     const meta = extractMetadata(resolvedTex);
     const sections = extractSections(body);
-    const bibMatch = resolvedTex.match(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/);
-    const bibliography = bibMatch ? bibMatch[0] : '';
 
     console.log(`[2/5] Found ${sections.length} sections: ${sections.map(s => s.title).join(', ')}`);
 

@@ -23,7 +23,7 @@ arxiv_id: '1609.08144'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1609.08144
 source: arxiv-pipeline
-pipeline_version: '2.1'
+pipeline_version: '2.0'
 tags:
   - auto-imported
   - arxiv-pipeline
