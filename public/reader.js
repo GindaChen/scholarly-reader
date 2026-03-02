@@ -840,16 +840,33 @@
                 };
             }
         });
-        // Pass 2: enrich from bibliography <li id="ref-N">
-        el.querySelectorAll('li[id^="ref-"]').forEach(li => {
+        // Pass 2: build/enrich from bibliography <li id="ref-N">
+        el.querySelectorAll('li[id^="ref-"]').forEach((li, idx) => {
             const num = li.id.replace('ref-', '');
             const text = li.textContent || '';
             const html = li.innerHTML || '';
             const arxivMatch = text.match(/arxiv[:/]+(\d{4}\.\d{4,5}(?:v\d+)?)/i);
             const linkMatch = html.match(/href="([^"]+)"/i);
+
+            // Extract title: text between </strong> and <em> (authors in strong, venue in em)
+            const afterStrong = html.replace(/<strong[^>]*>[\s\S]*?<\/strong>/i, '');
+            const beforeEm = afterStrong.replace(/<em[\s\S]*$/i, '');
+            const parsedTitle = beforeEm.replace(/<[^>]+>/g, '').replace(/^\s*\.?\s*/, '').trim();
+
             if (refs[num]) {
+                // Only override title if we got something meaningful (>4 chars)
+                if (parsedTitle.length > 4) refs[num].title = parsedTitle;
                 if (arxivMatch && !refs[num].arxivId) refs[num].arxivId = arxivMatch[1].split('v')[0];
                 if (linkMatch && !refs[num].url) refs[num].url = linkMatch[1];
+            } else {
+                // Create entry from bibliography even if no inline badge found
+                refs[num] = {
+                    num: parseInt(num) || num,
+                    title: parsedTitle || `Reference ${num}`,
+                    url: linkMatch ? linkMatch[1] : '',
+                    quote: '',
+                    arxivId: arxivMatch ? arxivMatch[1].split('v')[0] : '',
+                };
             }
         });
         return refs;
@@ -895,8 +912,9 @@
                 const prev = state.references;
                 state.references = refsMap;
                 showRefDetail(num);
+                // Open split using this refsMap's ref data (not main article's)
+                openRefInSplitViewFromRef(refsMap[num], num);
                 state.references = prev;
-                openRefInSplitView(num);
             });
             refList.appendChild(li);
         });
@@ -2609,8 +2627,15 @@
      * Tries to match the reference title against locally available docs.
      * Falls back to a "not available" message with the ref metadata.
      */
+    /** Open a ref by number, looking it up in state.references */
     async function openRefInSplitView(num) {
-        const ref = state.references[num];
+        const ref = state.references[num] || state.mainReferences[num];
+        if (!ref) return;
+        return openRefInSplitViewFromRef(ref, num);
+    }
+
+    /** Open a ref from a ref object directly (bypasses state.references lookup) */
+    async function openRefInSplitViewFromRef(ref, num) {
         if (!ref) return;
 
         const label = `[${num}] ${ref.title}`;
@@ -2868,10 +2893,9 @@
         el.querySelectorAll('.ref-badge[data-ref]').forEach(badge => {
             badge.addEventListener('click', () => {
                 const num = badge.dataset.ref;
-                // Switch the right panel to show THIS paper's references
                 const panelTitle = el.closest('.split-view')?.querySelector('.split-title')?.textContent || '';
                 switchRefsPanel(splitRefsMap, num, panelTitle);
-                openRefInSplitView(num);
+                openRefInSplitViewFromRef(splitRefsMap[num], num);
             });
         });
     }
