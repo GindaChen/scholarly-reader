@@ -2,14 +2,14 @@ title: Generating Sequences WithRecurrent Neural Networks
 short_title: Generating Sequences WithRecurrent Neura…
 type: journal-article
 authors: []
-date: '2026-03-01'
+date: '2026-03-02'
 url: https://arxiv.org/abs/1308.0850
 pdf: https://arxiv.org/pdf/1308.0850
 arxiv_id: '1308.0850'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1308.0850
 source: arxiv-pipeline
-pipeline_version: '2.0'
+pipeline_version: '2.1'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -21,6 +21,6 @@ files:
     primary: true
 variable_count: 0
 equation_count: 63
-reference_count: 0
+reference_count: 33
 sections: 8
 figures: 8

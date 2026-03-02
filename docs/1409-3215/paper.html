@@ -35,12 +35,12 @@ problem easier.</p>
 
 <p>Deep Neural Networks (DNNs) are extremely powerful machine learning
 models that achieve excellent performance on difficult problems such
-as speech recognition [hinton12][dahl12b] and visual object
-recognition [kriz12][ciresan12][lecun98][le12].  DNNs are
+as speech recognition <sup class="ref-badge" data-ref="13" data-title="V. Vanhoucke, P. Nguyen, T. Sainath, and B. Kingsbury.">13</sup><sup class="ref-badge" data-ref="7" data-title="Context-dependent pre-trained deep neural networks for large">7</sup> and visual object
+recognition <sup class="ref-badge" data-ref="19" data-title="ImageNet classification with deep convolutional neural networks.">19</sup><sup class="ref-badge" data-ref="6" data-title="Multi-column deep neural networks for image classification.">6</sup><sup class="ref-badge" data-ref="21" data-title="Gradient-based learning applied to document recognition.">21</sup><sup class="ref-badge" data-ref="20" data-title="A.Y. Ng.">20</sup>.  DNNs are
 powerful because they can perform arbitrary parallel computation for a
 modest number of steps.  A surprising example of the power of DNNs is
 their ability to sort <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span></span> \!\!\!\!\quad <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span></span>-bit numbers using only 2
-hidden layers of quadratic size [razborov]. So, while neural
+hidden layers of quadratic size <sup class="ref-badge" data-ref="27" data-title="On small depth threshold circuits.">27</sup>. So, while neural
 networks are related to conventional statistical models, they learn an
 intricate computation.  Furthermore, large DNNs can be trained with
 supervised backpropagation whenever the labeled training set has
@@ -65,14 +65,14 @@ sequences would be useful.</p>
 dimensionality of the inputs and outputs is known and fixed.</p>
 
 <p>In this paper, we show that a straightforward application of the Long
-Short-Term Memory (LSTM) architecture [hochreiter97] can solve
+Short-Term Memory (LSTM) architecture <sup class="ref-badge" data-ref="16" data-title="Long short-term memory.">16</sup> can solve
 general sequence to sequence problems.  The idea is to use one LSTM to
 read the input sequence, one timestep at a time, to obtain large
 fixed-dimensional vector representation, and then to use another LSTM
 to extract the output sequence from that vector
 (fig.~<a href="#fig:translation-model2" class="cross-ref">Fig. 1</a>).  The second LSTM is essentially a
 recurrent neural network language model
-[rumelhart1986learning][mikolov2010recurrent][sundermeyer12] except
+<sup class="ref-badge" data-ref="28" data-title="Learning representations by back-propagating errors.">28</sup><sup class="ref-badge" data-ref="23" data-title="Recurrent neural network based language model.">23</sup><sup class="ref-badge" data-ref="30" data-title="LSTM neural networks for language modeling.">30</sup> except
 that it is conditioned on the input sequence.  The LSTM's ability to
 successfully learn on data with long range temporal dependencies makes
 it a natural choice for this application due to the considerable time
@@ -81,17 +81,17 @@ lag between the inputs and their corresponding outputs
 
 <p>There have been a number of related attempts to address the general
 sequence to sequence learning problem with neural networks.   Our
-approach is closely related to Kalchbrenner and Blunsom [kal13] who were
+approach is closely related to Kalchbrenner and Blunsom <sup class="ref-badge" data-ref="18" data-title="Recurrent continuous translation models.">18</sup> who were
 the first to map the entire input sentence to vector, and is related 
-to Cho et al.~[cho14] although the latter was used only for rescoring hypotheses
+to Cho et al.~<sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup> although the latter was used only for rescoring hypotheses
 produced by a phrase-based system.  Graves
-[graves13c] introduced a novel differentiable attention mechanism
+<sup class="ref-badge" data-ref="10" data-title="Generating sequences with recurrent neural networks." data-arxiv-id="1308.0850">10</sup> introduced a novel differentiable attention mechanism
 that allows neural networks to focus on different parts
 of their input, and an elegant variant of this idea was successfully
-applied to machine translation by Bahdanau et al.~[bog14].  The Connectionist
+applied to machine translation by Bahdanau et al.~<sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and" data-arxiv-id="1409.0473">2</sup>.  The Connectionist
 Sequence Classification is another popular technique for mapping sequences
 to sequences with neural networks, but it assumes a monotonic alignment
-between the inputs and the outputs [graves1].</p>
+between the inputs and the outputs <sup class="ref-badge" data-ref="11" data-title="Connectionist temporal classification: labelling unsegmented sequence">11</sup>.</p>
 
 <p>The main result of this work is the following.  On the WMT'14 English
 to French translation task, we obtained a BLEU score of {\bf 34.81} by
@@ -100,7 +100,7 @@ directly extracting translations from an ensemble of 5 deep LSTMs
 decoder.  This is by far the best result achieved by direct
 translation with large neural networks.  For comparison, the BLEU
 score of an SMT baseline on
-this dataset is 33.30 [wmt14_en_fr].  The
+this dataset is 33.30 <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>.  The
 34.81 BLEU score was achieved by an LSTM with a vocabulary of 80k
 words, so the score was penalized whenever the reference translation
 contained a word not covered by these 80k.  This result shows that a
@@ -108,14 +108,14 @@ relatively unoptimized small-vocabulary neural network architecture which has mu
 for improvement outperforms a phrase-based SMT system.</p>
 
 <p>Finally, we used the LSTM to rescore the publicly available 1000-best
-lists of the SMT baseline on the same task [wmt14_en_fr].  By
+lists of the SMT baseline on the same task <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>.  By
 doing so, we obtained a BLEU score of 36.5, which improves the
 baseline by 3.2 BLEU points and is close to the previous best published
-result on this task (which is 37.0 [durrani-EtAl:2014:W14-33]).</p>
+result on this task (which is 37.0 <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for wmt-14.">9</sup>).</p>
 
 <p>Surprisingly, the LSTM did not suffer on very long sentences, despite
 the recent experience of other researchers with related architectures
-[curse].  We were able to do well on long sentences because we
+<sup class="ref-badge" data-ref="26" data-title="Overcoming the curse of sentence length for neural machine" data-arxiv-id="1409.1257">26</sup>.  We were able to do well on long sentences because we
 reversed the order of words in the source sentence but not the target
 sentences in the training and test set. By doing so, we introduced
 many short term dependencies that made the optimization problem much
@@ -140,7 +140,7 @@ fairly invariant to the active and passive voice.</p>
 
 <span id="sec:model" class="label-anchor"></span>
 
-<p>The Recurrent Neural Network (RNN) [werbos][rumelhart1986learning]
+<p>The Recurrent Neural Network (RNN) <sup class="ref-badge" data-ref="31" data-title="Backpropagation through time: what it does and how to do it.">31</sup><sup class="ref-badge" data-ref="28" data-title="Learning representations by back-propagating errors.">28</sup>
 is a natural generalization of feedforward neural networks to
 sequences.  Given a sequence of inputs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>x</mi><mi>T</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x_1,\ldots,x_T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>, a
 standard RNN computes a sequence of outputs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>y</mi><mi>T</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(y_1,\ldots,y_T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3283em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> by
@@ -158,13 +158,13 @@ relationships.</p>
 <p>The simplest strategy for general sequence learning is to map the input
 sequence to a fixed-sized vector using one RNN, and then to map the
 vector to the target sequence with another RNN (this approach has also been
-taken by Cho et al.~[cho14]).  While it could work
+taken by Cho et al.~<sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup>).  While it could work
 in principle since the RNN is provided with all the relevant
 information, it would be difficult to train the RNNs due to the
 resulting long term dependencies
 (figure <a href="#fig:translation-model2" class="cross-ref">Fig. 1</a>)
-[hochreiter_long_term][bengio_long_term][hochreiter97][Hochreiter01gradientflow]. However, the Long
-Short-Term Memory (LSTM) [hochreiter97] is known to learn
+<sup class="ref-badge" data-ref="14" data-title="Untersuchungen zu dynamischen neuronalen netzen.">14</sup><sup class="ref-badge" data-ref="4" data-title="Learning long-term dependencies with gradient descent is difficult.">4</sup><sup class="ref-badge" data-ref="16" data-title="Long short-term memory.">16</sup><sup class="ref-badge" data-ref="15" data-title="Gradient flow in recurrent nets: the difficulty of learning long-term">15</sup>. However, the Long
+Short-Term Memory (LSTM) <sup class="ref-badge" data-ref="16" data-title="Long short-term memory.">16</sup> is known to learn
 problems with long range temporal dependencies, so an LSTM may succeed
 in this setting.</p>
 
@@ -184,7 +184,7 @@ initial hidden state is set to the representation <span class="math-inline"><spa
 
 <p>In this equation, each <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mi>t</mi></msub><mi mathvariant="normal">∣</mi><mi>v</mi><mo separator="true">,</mo><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>y</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p(y_t | v, y_1, \ldots, y_{t-1})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> distribution
 is represented with a softmax over all the words in the
-vocabulary.  We use the LSTM formulation from Graves [graves13c].
+vocabulary.  We use the LSTM formulation from Graves <sup class="ref-badge" data-ref="10" data-title="Generating sequences with recurrent neural networks." data-arxiv-id="1308.0850">10</sup>.
 Note that we require that each sentence ends with a special
 end-of-sentence symbol ``<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>EOS<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span>'', which enables the model to define a
 distribution over sequences of all possible lengths. The overall
@@ -198,13 +198,13 @@ ways.  First, we used two different LSTMs: one for the input sequence
 and another for the output sequence, because doing so increases the
 number model parameters at negligible computational cost and makes it
 natural to train the LSTM on multiple language pairs simultaneously
-[kal13].  Second, we found that deep LSTMs significantly
+<sup class="ref-badge" data-ref="18" data-title="Recurrent continuous translation models.">18</sup>.  Second, we found that deep LSTMs significantly
 outperformed shallow LSTMs, so we chose an LSTM with four layers.
 Third, we found it extremely valuable to reverse the order of the
 words of the input sentence. So for example, instead of mapping the
 sentence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mo separator="true">,</mo><mi>b</mi><mo separator="true">,</mo><mi>c</mi></mrow><annotation encoding="application/x-tex">a,b,c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">a</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="b" data-desc="Bias vector" style="--var-color: #ffd700"><span class="mord mathnormal">b</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">c</span></span></span></span></span> to the sentence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo separator="true">,</mo><mi>β</mi><mo separator="true">,</mo><mi>γ</mi></mrow><annotation encoding="application/x-tex">\alpha, \beta, \gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span></span></span></span></span>, the LSTM is
-asked to map <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mo separator="true">,</mo><mi>b</mi><mo separator="true">,</mo><mi>a</mi></mrow><annotation encoding="application/x-tex">c,b,a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">c</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="b" data-desc="Bias vector" style="--var-color: #ffd700"><span class="mord mathnormal">b</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">a</span></span></span></span></span> to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo separator="true">,</mo><mi>β</mi><mo separator="true">,</mo><mi>γ</mi></mrow><annotation encoding="application/x-tex">\alpha, \beta, \gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span></span></span></span></span>, where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo separator="true">,</mo><mi>β</mi><mo separator="true">,</mo><mi>γ</mi></mrow><annotation encoding="application/x-tex">\alpha, \beta,
-\gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span></span></span></span></span> is the translation of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mo separator="true">,</mo><mi>b</mi><mo separator="true">,</mo><mi>c</mi></mrow><annotation encoding="application/x-tex">a,b,c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">a</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="b" data-desc="Bias vector" style="--var-color: #ffd700"><span class="mord mathnormal">b</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">c</span></span></span></span></span>.  This way, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">a</span></span></span></span></span> is in close
+asked to map <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mo separator="true">,</mo><mi>b</mi><mo separator="true">,</mo><mi>a</mi></mrow><annotation encoding="application/x-tex">c,b,a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">c</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="var" data-var="b" data-desc="Bias vector" style="--var-color: #ffd700"><span class="mord mathnormal">b</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">a</span></span></span></span></span> to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo separator="true">,</mo><mi>β</mi><mo separator="true">,</mo><mi>γ</mi></mrow><annotation encoding="application/x-tex">\alpha, \beta, \gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span></span></span></span></span>, where $\alpha, \beta,
+\gamma<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi><mi>s</mi><mi>t</mi><mi>h</mi><mi>e</mi><mi>t</mi><mi>r</mi><mi>a</mi><mi>n</mi><mi>s</mi><mi>l</mi><mi>a</mi><mi>t</mi><mi>i</mi><mi>o</mi><mi>n</mi><mi>o</mi><mi>f</mi></mrow><annotation encoding="application/x-tex">is the translation of</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">i</span><span class="mord mathnormal">s</span><span class="mord mathnormal">t</span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="mord mathnormal">e</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">an</span><span class="mord mathnormal">s</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal">a</span><span class="mord mathnormal">t</span><span class="mord mathnormal">i</span><span class="mord mathnormal">o</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span></span></span></span></span>a,b,c<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">.</mi><mi>T</mi><mi>h</mi><mi>i</mi><mi>s</mi><mi>w</mi><mi>a</mi><mi>y</mi><mo separator="true">,</mo></mrow><annotation encoding="application/x-tex">.  This way,</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">.</span><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="mord mathnormal">hi</span><span class="mord mathnormal">s</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span></span></span></span></span>a$ is in close
 proximity to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span></span>, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="var" data-var="b" data-desc="Bias vector" style="--var-color: #ffd700"><span class="mord mathnormal">b</span></span></span></span></span></span> is fairly close to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span></span>, and so on, a
 fact that makes it easy for SGD to ``establish communication'' between
 the input and the output.  We found this simple data transformation to
@@ -228,10 +228,10 @@ representation.
 <p>We used the WMT'14 English to French dataset.  We trained our models
 on a subset of 12M sentences consisting of 348M French words and 304M
 English words, which is a clean ``selected'' subset from
-[wmt14_en_fr]. We chose this translation task and this specific
+<sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>. We chose this translation task and this specific
 training set subset because of the public availability of a tokenized training and
 test set together with 1000-best lists from the baseline SMT 
-[wmt14_en_fr].</p>
+<sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>.</p>
 
 <p>As typical neural language models rely on a vector representation for
 each word, we used a fixed vocabulary for both languages.  We used
@@ -247,8 +247,8 @@ probability of a correct translation <span class="math-inline"><span class="kate
 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span></span></span>, so the training objective is</p>
 
 <div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mi mathvariant="normal">∣</mi><mi mathvariant="script">S</mi><mi mathvariant="normal">∣</mi><munder><mo>∑</mo><mrow><mo stretchy="false">(</mo><mi>T</mi><mo separator="true">,</mo><mi>S</mi><mo stretchy="false">)</mo><mo>∈</mo><mi mathvariant="script">S</mi></mrow></munder><mi>log</mi><mo>⁡</mo><mi>p</mi><mo stretchy="false">(</mo><mi>T</mi><mi mathvariant="normal">∣</mi><mi>S</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">1/|\mathcal S|\sum_{(T,S)\in\mathcal S}\log p(T|S)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.566em;vertical-align:-1.516em;"></span><span class="mord">1/∣</span><span class="mord mathcal" style="margin-right:0.075em;">S</span><span class="mord">∣</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.05em;"><span style="top:-1.809em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span><span class="mclose mtight">)</span><span class="mrel mtight">∈</span><span class="mord mathcal mtight" style="margin-right:0.075em;">S</span></span></span></span><span style="top:-3.05em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.516em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mclose">)</span></span></span></span></span></div>
- where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="script">S</mi></mrow><annotation encoding="application/x-tex">\mathcal
-S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathcal" style="margin-right:0.075em;">S</span></span></span></span></span> is the training set.  Once training is complete, we produce
+ where $\mathcal
+S$ is the training set.  Once training is complete, we produce
 translations by finding the most likely translation according to
 the LSTM:
 
@@ -270,7 +270,7 @@ size 2 provides most of the benefits of beam search (Table
 <a href="#tab:blue_fr" class="cross-ref">Table 1</a>).</p>
 
 <p>We also used the LSTM to rescore the 1000-best lists produced by the
-baseline system [wmt14_en_fr].  To rescore an n-best list, we
+baseline system <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>.  To rescore an n-best list, we
 computed the log probability of every hypothesis with our LSTM and
 took an even average with their score and the LSTM's score.</p>
 
@@ -288,7 +288,7 @@ believe that it is caused by the introduction of many short term
 dependencies to the dataset.  Normally, when we concatenate a source
 sentence with a target sentence, each word in the source sentence is
 far from its corresponding word in the target sentence. As a result,
-the problem has a large ``minimal time lag'' [minimal_time_lag].  By reversing the
+the problem has a large ``minimal time lag'' <sup class="ref-badge" data-ref="17" data-title="LSTM can solve hard long time lag problems.">17</sup>.  By reversing the
 words in the source sentence, the average distance between
 corresponding words in the source and target language is unchanged.
 However, the first few words in the source language are now very close to
@@ -330,9 +330,9 @@ recurrent connections (32M for the ``encoder'' LSTM and 32M for the
 - Although LSTMs tend to not suffer from the vanishing gradient
   problem, they can have exploding gradients.  Thus we enforced a hard
   constraint on the norm of the gradient
-  [graves13c][razvan] by scaling it when its norm exceeded
-  a threshold. For each training batch, we compute <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi><mo>=</mo><msub><mrow><mo fence="true">∥</mo><mi>g</mi><mo fence="true">∥</mo></mrow><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">s =
-  \left\|g\right\|_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.0497em;vertical-align:-0.2997em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.4003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2997em;"><span></span></span></span></span></span></span></span></span></span></span>, where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span></span></span></span></span> is the gradient divided by 128. If <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi><mo>&gt;</mo><mn>5</mn></mrow><annotation encoding="application/x-tex">s &gt; 5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5</span></span></span></span></span>, we set
+  <sup class="ref-badge" data-ref="10" data-title="Generating sequences with recurrent neural networks." data-arxiv-id="1308.0850">10</sup><sup class="ref-badge" data-ref="25" data-title="On the difficulty of training recurrent neural networks." data-arxiv-id="1211.5063">25</sup> by scaling it when its norm exceeded
+  a threshold. For each training batch, we compute $s =
+  \left\|g\right\|_2<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo separator="true">,</mo><mi>w</mi><mi>h</mi><mi>e</mi><mi>r</mi><mi>e</mi></mrow><annotation encoding="application/x-tex">, where</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="mord mathnormal" style="margin-right:0.02778em;">er</span><span class="mord mathnormal">e</span></span></span></span></span>g<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi><mi>s</mi><mi>t</mi><mi>h</mi><mi>e</mi><mi>g</mi><mi>r</mi><mi>a</mi><mi>d</mi><mi>i</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>d</mi><mi>i</mi><mi>v</mi><mi>i</mi><mi>d</mi><mi>e</mi><mi>d</mi><mi>b</mi><mi>y</mi><mn>128.</mn><mi>I</mi><mi>f</mi></mrow><annotation encoding="application/x-tex">is the gradient divided by 128. If</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">i</span><span class="mord mathnormal">s</span><span class="mord mathnormal">t</span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">a</span><span class="mord mathnormal">d</span><span class="mord mathnormal">i</span><span class="mord mathnormal">e</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">t</span><span class="mord mathnormal">d</span><span class="mord mathnormal">i</span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mord mathnormal">i</span><span class="mord mathnormal">d</span><span class="mord mathnormal">e</span><span class="mord mathnormal">d</span><span class="var" data-var="b" data-desc="Bias vector" style="--var-color: #ffd700"><span class="mord mathnormal">b</span></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mord">128.</span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span></span></span></span></span>s > 5$, we set
   <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi><mo>=</mo><mfrac><mrow><mn>5</mn><mi>g</mi></mrow><mi>s</mi></mfrac></mrow><annotation encoding="application/x-tex">g = \frac{5g}{s}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2422em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8972em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">s</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.4461em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">5</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>.
 - Different sentences have different lengths.  Most sentences are
   short (e.g., length 20-30) but some sentences are long (e.g., length
@@ -359,12 +359,12 @@ Training took about a ten days with this implementation.</p>
 
 ### Experimental Results
 
-<p>We used the cased BLEU score [bleu] to evaluate the quality of our
+<p>We used the cased BLEU score <sup class="ref-badge" data-ref="24" data-title="BLEU: a method for automatic evaluation of machine translation.">24</sup> to evaluate the quality of our
 translations. We computed our BLEU scores using \texttt{multi-bleu.pl} 
 on the *tokenized* predictions and ground truth.
-This way of evaluating the BELU score is consistent with [cho14] and [bog14], and reproduces
-the 33.3 score of [wmt14_en_fr].
-However, if we evaluate the best WMT'14 system [durrani-EtAl:2014:W14-33]
+This way of evaluating the BELU score is consistent with <sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup> and <sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and" data-arxiv-id="1409.0473">2</sup>, and reproduces
+the 33.3 score of <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup>.
+However, if we evaluate the best WMT'14 system <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for wmt-14.">9</sup>
 (whose predictions can be downloaded from [statmt.org\matrix](statmt.org\matrix)) in this manner, we get   
 37.0, which is greater than the 35.8 reported by [statmt.org\matrix](statmt.org\matrix).</p>
 
@@ -389,11 +389,11 @@ list of the baseline system.</p>
   </tr></thead>
   <tbody>
   <tr>
-    <td>Bahdanau et al. [bog14]</td>
+    <td>Bahdanau et al. <sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and" data-arxiv-id="1409.0473">2</sup></td>
     <td>28.45</td>
   </tr>
   <tr>
-    <td>Baseline System  [wmt14_en_fr]</td>
+    <td>Baseline System  <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup></td>
     <td>33.30</td>
   </tr>
   <tr>
@@ -432,15 +432,15 @@ list of the baseline system.</p>
   </tr></thead>
   <tbody>
   <tr>
-    <td>Baseline System  [wmt14_en_fr]</td>
+    <td>Baseline System  <sup class="ref-badge" data-ref="29" data-title="University le mans.">29</sup></td>
     <td>33.30</td>
   </tr>
   <tr>
-    <td>Cho et al. [cho14]</td>
+    <td>Cho et al. <sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup></td>
     <td>34.54</td>
   </tr>
   <tr>
-    <td>Best WMT'14 result [durrani-EtAl:2014:W14-33]</td>
+    <td>Best WMT'14 result <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for wmt-14.">9</sup></td>
     <td>{\bf 37.0}</td>
   </tr>
   <tr>
@@ -588,42 +588,42 @@ two-dimensional projections are obtained using PCA.</p>
 
 <p>There is a large body of work on applications of neural networks to
 machine translation. So far, the simplest and most effective way of
-applying an RNN-Language Model (RNNLM) [mikolov2010recurrent] or
-a Feedforward Neural Network Language Model (NNLM) [bengio] to an
+applying an RNN-Language Model (RNNLM) <sup class="ref-badge" data-ref="23" data-title="Recurrent neural network based language model.">23</sup> or
+a Feedforward Neural Network Language Model (NNLM) <sup class="ref-badge" data-ref="3" data-title="A neural probabilistic language model.">3</sup> to an
 MT task is by rescoring the n-best lists of a strong MT baseline
-[mikolov2012], which reliably improves translation quality.</p>
+<sup class="ref-badge" data-ref="22" data-title="Statistical Language Models based on Neural Networks.">22</sup>, which reliably improves translation quality.</p>
 
 <p>More recently, researchers have begun to look into ways of including
 information about the source language into the NNLM.  Examples of this
-work include Auli et al.~[auli13], who combine an NNLM with a
+work include Auli et al.~<sup class="ref-badge" data-ref="1" data-title="Joint language and translation modeling with recurrent neural">1</sup>, who combine an NNLM with a
 topic model of the input sentence, which improves rescoring
-performance.  Devlin et al.~[devlin14] followed a similar
+performance.  Devlin et al.~<sup class="ref-badge" data-ref="8" data-title="Fast and robust neural network joint models for statistical machine">8</sup> followed a similar
 approach, but they incorporated their NNLM into the decoder of an MT
 system and used the decoder's alignment information to provide the
 NNLM with the most useful words in the input sentence.  Their approach
 was highly successful and it achieved large improvements over their
 baseline.</p>
 
-<p>Our work is closely related to Kalchbrenner and Blunsom [kal13],
+<p>Our work is closely related to Kalchbrenner and Blunsom <sup class="ref-badge" data-ref="18" data-title="Recurrent continuous translation models.">18</sup>,
 who were the first to map the input sentence into a vector and then
 back to a sentence, although they map sentences to vectors using
 convolutional neural networks, which lose the ordering of the words.
-Similarly to this work, Cho et al.~[cho14] used an LSTM-like RNN
+Similarly to this work, Cho et al.~<sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup> used an LSTM-like RNN
 architecture to map sentences into vectors and back, although their
 primary focus was on integrating their neural network into an SMT
-system.  Bahdanau et al.~[bog14] also attempted direct
+system.  Bahdanau et al.~<sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and" data-arxiv-id="1409.0473">2</sup> also attempted direct
 translations with a neural network that used an attention mechanism to
 overcome the poor performance on long sentences experienced by Cho et
-al.~[cho14] and achieved encouraging results.  Likewise,
-Pouget-Abadie et al.~[curse] attempted to address the memory
-problem of Cho et al.~[cho14] by translating pieces of the source
+al.~<sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup> and achieved encouraging results.  Likewise,
+Pouget-Abadie et al.~<sup class="ref-badge" data-ref="26" data-title="Overcoming the curse of sentence length for neural machine" data-arxiv-id="1409.1257">26</sup> attempted to address the memory
+problem of Cho et al.~<sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup> by translating pieces of the source
 sentence in way that produces smooth translations, which is similar to
 a phrase-based approach.  We suspect that they could achieve similar
 improvements by simply training their networks on reversed source
 sentences.</p>
 
 <p>End-to-end training is also the focus of Hermann et
-al.~[hermann14], whose model represents the inputs and outputs by
+al.~<sup class="ref-badge" data-ref="12" data-title="Multilingual distributed representations without word alignment.">12</sup>, whose model represents the inputs and outputs by
 feedforward networks, and map them to similar points in
 space. However, their approach cannot generate translations directly:
 to get a translation, they need to do a look up for closest vector in
@@ -655,7 +655,7 @@ did not verify it experimentally).</p>
 translate very long sentences.  We were initially convinced that the
 LSTM would fail on long sentences due to its limited memory, and other
 researchers reported poor performance on long sentences with a model
-similar to ours [cho14][bog14][curse].  And yet,
+similar to ours <sup class="ref-badge" data-ref="5" data-title="Learning phrase representations using RNN encoder-decoder for" data-arxiv-id="1406.1078">5</sup><sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and" data-arxiv-id="1409.0473">2</sup><sup class="ref-badge" data-ref="26" data-title="Overcoming the curse of sentence length for neural machine" data-arxiv-id="1409.1257">26</sup>.  And yet,
 LSTMs trained on the reversed dataset had little difficulty translating long
 sentences.</p>
 
@@ -682,4 +682,35 @@ and the Google Brain team for useful comments and discussions.</p>
 
 <h2>References</h2>
 <ol class="references">
+  <li id="ref-1"><strong>M. Auli, M. Galley, C. Quirk, and G. Zweig.</strong> Joint language and translation modeling with recurrent neural. <em>networks. In EMNLP, 2013.</em></li>
+  <li id="ref-2"><strong>D. Bahdanau, K. Cho, and Y. Bengio.</strong> Neural machine translation by jointly learning to align and. <em>translate. arXiv preprint arXiv:1409.0473, 2014.</em></li>
+  <li id="ref-3"><strong>Y. Bengio, R. Ducharme, P. Vincent, and C. Jauvin.</strong> A neural probabilistic language model.. <em>In Journal of Machine Learning Research, pages 1137--1155, 2003.</em></li>
+  <li id="ref-4"><strong>Y. Bengio, P. Simard, and P. Frasconi.</strong> Learning long-term dependencies with gradient descent is difficult.. <em>IEEE Transactions on Neural Networks, 5(2):157--166, 1994.</em></li>
+  <li id="ref-5"><strong>K. Cho, B. Merrienboer, C. Gulcehre, F. Bougares, H. Schwenk, and Y. Bengio.</strong> Learning phrase representations using RNN encoder-decoder for. <em>statistical machine translation. In Arxiv preprint arXiv:1406.1078, 2014.</em></li>
+  <li id="ref-6"><strong>D. Ciresan, U. Meier, and J. Schmidhuber.</strong> Multi-column deep neural networks for image classification.. <em>In CVPR, 2012.</em></li>
+  <li id="ref-7"><strong>G. E. Dahl, D. Yu, L. Deng, and A. Acero.</strong> Context-dependent pre-trained deep neural networks for large. <em>vocabulary speech recognition. IEEE Transactions on Audio, Speech, and Language Processing - Special Issue on Deep Learning for Speech and Language Processing, 2012.</em></li>
+  <li id="ref-8"><strong>J. Devlin, R. Zbib, Z. Huang, T. Lamar, R. Schwartz, and J. Makhoul.</strong> Fast and robust neural network joint models for statistical machine. <em>translation. In ACL, 2014.</em></li>
+  <li id="ref-9"><strong>Nadir Durrani, Barry Haddow, Philipp Koehn, and Kenneth Heafield.</strong> Edinburgh's phrase-based machine translation systems for wmt-14.. <em>In WMT, 2014.</em></li>
+  <li id="ref-10"><strong>A. Graves.</strong> Generating sequences with recurrent neural networks.. <em>In Arxiv preprint arXiv:1308.0850, 2013.</em></li>
+  <li id="ref-11"><strong>A. Graves, S. Fern\'andez, F. Gomez, and J. Schmidhuber.</strong> Connectionist temporal classification: labelling unsegmented sequence. <em>data with recurrent neural networks. In ICML, 2006.</em></li>
+  <li id="ref-12"><strong>K. M. Hermann and P. Blunsom.</strong> Multilingual distributed representations without word alignment.. <em>In ICLR, 2014.</em></li>
+  <li id="ref-13"><strong>G. Hinton, L. Deng, D. Yu, G. Dahl, A. Mohamed, N. Jaitly, A. Senior,</strong> V. Vanhoucke, P. Nguyen, T. Sainath, and B. Kingsbury.. <em>Deep neural networks for acoustic modeling in speech recognition. IEEE Signal Processing Magazine, 2012.</em></li>
+  <li id="ref-14"><strong>S. Hochreiter.</strong> Untersuchungen zu dynamischen neuronalen netzen.. <em>Master's thesis, Institut fur Informatik, Technische Universitat, Munchen, 1991.</em></li>
+  <li id="ref-15"><strong>S. Hochreiter, Y. Bengio, P. Frasconi, and J. Schmidhuber.</strong> Gradient flow in recurrent nets: the difficulty of learning long-term. <em>dependencies, 2001.</em></li>
+  <li id="ref-16"><strong>S. Hochreiter and J. Schmidhuber.</strong> Long short-term memory.. <em>Neural Computation, 1997.</em></li>
+  <li id="ref-17"><strong>S. Hochreiter and J. Schmidhuber.</strong> LSTM can solve hard long time lag problems.. <em>1997.</em></li>
+  <li id="ref-18"><strong>N. Kalchbrenner and P. Blunsom.</strong> Recurrent continuous translation models.. <em>In EMNLP, 2013.</em></li>
+  <li id="ref-19"><strong>A. Krizhevsky, I. Sutskever, and G. E. Hinton.</strong> ImageNet classification with deep convolutional neural networks.. <em>In NIPS, 2012.</em></li>
+  <li id="ref-20"><strong>Q.V. Le, M.A. Ranzato, R. Monga, M. Devin, K. Chen, G.S. Corrado, J. Dean, and</strong> A.Y. Ng.. <em>Building high-level features using large scale unsupervised learning. In ICML, 2012.</em></li>
+  <li id="ref-21"><strong>Y. LeCun, L. Bottou, Y. Bengio, and P. Haffner.</strong> Gradient-based learning applied to document recognition.. <em>Proceedings of the IEEE, 1998.</em></li>
+  <li id="ref-22"><strong>T. Mikolov.</strong> Statistical Language Models based on Neural Networks.. <em>PhD thesis, Brno University of Technology, 2012.</em></li>
+  <li id="ref-23"><strong>T. Mikolov, M. Karafi\'at, L. Burget, J. Cernock\`y, and S. Khudanpur.</strong> Recurrent neural network based language model.. <em>In INTERSPEECH, pages 1045--1048, 2010.</em></li>
+  <li id="ref-24"><strong>K. Papineni, S. Roukos, T. Ward, and W. J. Zhu.</strong> BLEU: a method for automatic evaluation of machine translation.. <em>In ACL, 2002.</em></li>
+  <li id="ref-25"><strong>R. Pascanu, T. Mikolov, and Y. Bengio.</strong> On the difficulty of training recurrent neural networks.. <em>arXiv preprint arXiv:1211.5063, 2012.</em></li>
+  <li id="ref-26"><strong>J. Pouget-Abadie, D. Bahdanau, B. van Merrienboer, K. Cho, and Y. Bengio.</strong> Overcoming the curse of sentence length for neural machine. <em>translation using automatic segmentation. arXiv preprint arXiv:1409.1257, 2014.</em></li>
+  <li id="ref-27"><strong>A. Razborov.</strong> On small depth threshold circuits.. <em>In Proc. 3rd Scandinavian Workshop on Algorithm Theory, 1992.</em></li>
+  <li id="ref-28"><strong>D. Rumelhart, G. E. Hinton, and R. J. Williams.</strong> Learning representations by back-propagating errors.. <em>Nature, 323(6088):533--536, 1986.</em></li>
+  <li id="ref-29"><strong>H. Schwenk.</strong> University le mans.. <em>http://www-lium.univ-lemans.fr/ schwenk/cslm_joint_paper/, 2014. [Online; accessed 03-September-2014].</em></li>
+  <li id="ref-30"><strong>M. Sundermeyer, R. Schluter, and H. Ney.</strong> LSTM neural networks for language modeling.. <em>In INTERSPEECH, 2010.</em></li>
+  <li id="ref-31"><strong>P. Werbos.</strong> Backpropagation through time: what it does and how to do it.. <em>Proceedings of IEEE, 1990. \endthebibliography</em></li>
 </ol>

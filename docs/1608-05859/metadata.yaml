@@ -6,14 +6,14 @@ authors:
     family: University
   - given: ''
     family: wolf\
-date: '2026-03-01'
+date: '2026-03-02'
 url: https://arxiv.org/abs/1608.05859
 pdf: https://arxiv.org/pdf/1608.05859
 arxiv_id: '1608.05859'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1608.05859
 source: arxiv-pipeline
-pipeline_version: '2.0'
+pipeline_version: '2.1'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -31,6 +31,6 @@ files:
     primary: true
 variable_count: 0
 equation_count: 2
-reference_count: 0
+reference_count: 42
 sections: 4
 figures: 0

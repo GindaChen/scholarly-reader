@@ -4,14 +4,14 @@ title: |-
 short_title: \Large Outrageously Large Neural Network…
 type: journal-article
 authors: []
-date: '2026-03-01'
+date: '2026-03-02'
 url: https://arxiv.org/abs/1701.06538
 pdf: https://arxiv.org/pdf/1701.06538
 arxiv_id: '1701.06538'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1701.06538
 source: arxiv-pipeline
-pipeline_version: '2.0'
+pipeline_version: '2.1'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -29,6 +29,6 @@ files:
     primary: true
 variable_count: 0
 equation_count: 22
-reference_count: 0
+reference_count: 44
 sections: 7
 figures: 4

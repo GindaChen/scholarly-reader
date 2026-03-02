@@ -16,14 +16,14 @@ authors:
     family: zhifengc
   - given: ''
     family: qvl
-date: '2026-03-01'
+date: '2026-03-02'
 url: https://arxiv.org/abs/1609.08144
 pdf: https://arxiv.org/pdf/1609.08144
 arxiv_id: '1609.08144'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1609.08144
 source: arxiv-pipeline
-pipeline_version: '2.0'
+pipeline_version: '2.1'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -43,6 +43,6 @@ files:
     primary: true
 variable_count: 0
 equation_count: 14
-reference_count: 0
+reference_count: 45
 sections: 11
 figures: 8

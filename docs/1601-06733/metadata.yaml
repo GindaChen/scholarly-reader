@@ -2,14 +2,14 @@ title: Long Short-Term Memory-Networks for Machine Reading
 short_title: Long Short-Term Memory-Networks for Mach…
 type: journal-article
 authors: []
-date: '2026-03-01'
+date: '2026-03-02'
 url: https://arxiv.org/abs/1601.06733
 pdf: https://arxiv.org/pdf/1601.06733
 arxiv_id: '1601.06733'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1601.06733
 source: arxiv-pipeline
-pipeline_version: '2.0'
+pipeline_version: '2.1'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -29,6 +29,6 @@ files:
     primary: true
 variable_count: 0
 equation_count: 16
-reference_count: 0
+reference_count: 51
 sections: 8
 figures: 5

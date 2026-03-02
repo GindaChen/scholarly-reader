@@ -12,14 +12,14 @@ authors:
     family: cxiong
   - given: ''
     family: rsocher\
-date: '2026-03-01'
+date: '2026-03-02'
 url: https://arxiv.org/abs/1705.04304
 pdf: https://arxiv.org/pdf/1705.04304
 arxiv_id: '1705.04304'
 archive: arxiv
 archive_url: https://arxiv.org/abs/1705.04304
 source: arxiv-pipeline
-pipeline_version: '2.0'
+pipeline_version: '2.1'
 tags:
   - auto-imported
   - arxiv-pipeline
@@ -39,6 +39,6 @@ files:
     primary: true
 variable_count: 0
 equation_count: 16
-reference_count: 0
+reference_count: 4
 sections: 9
 figures: 1
