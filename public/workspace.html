@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scholarly Reader — Workspace</title>
+    <meta name="description" content="AI-powered academic paper workspace with chat, sources, and rich analysis tools">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="workspace.css">
+</head>
+
+<body>
+    <div class="workspace">
+        <!-- ── Top Bar ── -->
+        <div class="workspace-topbar">
+            <div class="topbar-logo">S</div>
+            <div class="topbar-title">Scholarly Reader</div>
+            <div class="topbar-spacer"></div>
+            <button class="topbar-btn" id="btn-import" title="Import from arXiv">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                Import
+            </button>
+            <button class="topbar-btn" id="btn-settings" title="Settings">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"></circle>
+                    <path
+                        d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z">
+                    </path>
+                </svg>
+            </button>
+        </div>
+
+        <!-- ── Sources Panel (Left) ── -->
+        <div class="sources-panel">
+            <div class="sources-header">
+                <div class="sources-title">
+                    Sources
+                    <button class="sources-title-toggle" id="sources-collapse" title="Collapse panel">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                        </svg>
+                    </button>
+                </div>
+                <button class="add-source-btn" id="btn-add-source">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                    Add sources
+                </button>
+                <div class="sources-search">
+                    <svg class="sources-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="source-search" placeholder="Search the web for new sources"
+                        autocomplete="off">
+                </div>
+            </div>
+
+            <div class="sources-filter-row">
+                <span style="font-size:11px; color:var(--text-tertiary)">Select all sources</span>
+                <div style="flex:1"></div>
+            </div>
+
+            <div class="sources-list" id="sources-list">
+                <!-- Sources injected by JS -->
+            </div>
+
+            <div class="source-select-bar">
+                <span id="source-count">0 sources selected</span>
+                <button class="select-all-btn" id="select-all-btn">Select all</button>
+            </div>
+        </div>
+
+        <!-- ── Chat Panel (Center) ── -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <h2>Chat</h2>
+            </div>
+
+            <div class="chat-messages" id="chat-messages">
+                <!-- Empty state -->
+                <div class="chat-empty" id="chat-empty">
+                    <div class="chat-empty-icon">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
+                            <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"></path>
+                        </svg>
+                    </div>
+                    <h3>Ask about your sources</h3>
+                    <p>Chat with your documents. Select sources on the left, then ask questions. The AI will ground its
+                        answers in your selected papers.</p>
+                    <div class="chat-suggestion-row" id="chat-suggestions">
+                        <!-- Injected by JS based on loaded sources -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <textarea class="chat-input-field" id="chat-input" placeholder="Start typing..." rows="1"
+                        autocomplete="off"></textarea>
+                    <span class="chat-source-count" id="chat-source-indicator">0 sources</span>
+                    <button class="chat-send-btn" id="chat-send" title="Send">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Studio Panel (Right) ── -->
+        <div class="studio-panel">
+            <div class="studio-header">
+                <div class="studio-title">Studio</div>
+                <button class="studio-title-toggle" title="Collapse studio">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                        <line x1="15" y1="3" x2="15" y2="21"></line>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="studio-grid">
+                <!-- Summary Report -->
+                <div class="studio-card" data-op="summary">
+                    <div class="studio-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="studio-card-body">
+                        <span class="studio-card-label">Reports</span>
+                    </div>
+                    <button class="studio-card-edit" title="Customize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Flashcards -->
+                <div class="studio-card" data-op="flashcards">
+                    <div class="studio-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                            <line x1="8" y1="21" x2="16" y2="21"></line>
+                            <line x1="12" y1="17" x2="12" y2="21"></line>
+                        </svg>
+                    </div>
+                    <div class="studio-card-body">
+                        <span class="studio-card-label">Flashcards</span>
+                    </div>
+                    <button class="studio-card-edit" title="Customize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Quiz -->
+                <div class="studio-card" data-op="quiz">
+                    <div class="studio-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"></path>
+                            <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                        </svg>
+                    </div>
+                    <div class="studio-card-body">
+                        <span class="studio-card-label">Quiz</span>
+                    </div>
+                    <button class="studio-card-edit" title="Customize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Mind Map -->
+                <div class="studio-card" data-op="mind_map">
+                    <div class="studio-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <circle cx="12" cy="12" r="3"></circle>
+                            <circle cx="4" cy="6" r="2"></circle>
+                            <circle cx="20" cy="6" r="2"></circle>
+                            <circle cx="4" cy="18" r="2"></circle>
+                            <circle cx="20" cy="18" r="2"></circle>
+                            <line x1="9.5" y1="10.5" x2="5.5" y2="7.5"></line>
+                            <line x1="14.5" y1="10.5" x2="18.5" y2="7.5"></line>
+                            <line x1="9.5" y1="13.5" x2="5.5" y2="16.5"></line>
+                            <line x1="14.5" y1="13.5" x2="18.5" y2="16.5"></line>
+                        </svg>
+                    </div>
+                    <div class="studio-card-body">
+                        <span class="studio-card-label">Mind Map</span>
+                        <span class="studio-card-badge">Beta</span>
+                    </div>
+                    <button class="studio-card-edit" title="Customize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Data Table -->
+                <div class="studio-card" data-op="data_table">
+                    <div class="studio-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="3" y1="9" x2="21" y2="9"></line>
+                            <line x1="3" y1="15" x2="21" y2="15"></line>
+                            <line x1="9" y1="3" x2="9" y2="21"></line>
+                        </svg>
+                    </div>
+                    <div class="studio-card-body">
+                        <span class="studio-card-label">Data Table</span>
+                    </div>
+                    <button class="studio-card-edit" title="Customize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Reading Guide -->
+                <div class="studio-card" data-op="reading_guide">
+                    <div class="studio-card-icon">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z">
+                            </path>
+                            <path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z">
+                            </path>
+                        </svg>
+                    </div>
+                    <div class="studio-card-body">
+                        <span class="studio-card-label">Reading Guide</span>
+                    </div>
+                    <button class="studio-card-edit" title="Customize">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Running / Completed Operations -->
+            <div class="studio-operations" id="studio-operations">
+                <!-- Populated by JS when operations run -->
+            </div>
+
+            <button class="studio-note-btn" id="btn-add-note">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+                Add note
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Result Modal ── -->
+    <div class="result-overlay" id="result-overlay">
+        <div class="result-modal">
+            <div class="result-modal-header">
+                <span class="result-modal-title" id="result-modal-title">Result</span>
+                <button class="result-modal-close" id="result-modal-close" title="Close">×</button>
+            </div>
+            <div class="result-modal-body" id="result-modal-body">
+                <!-- Result content rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="workspace.js"></script>
+</body>
+
+</html>

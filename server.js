@@ -26,6 +26,11 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/docs', express.static(path.join(__dirname, 'docs')));
 
+// --- Workspace route (main landing page) ---
+app.get('/workspace', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'workspace.html'));
+});
+
 // --- Storage ---
 const DOCS_DIR = path.join(__dirname, 'docs');
 const ANNOTATIONS_DIR = path.join(__dirname, 'data', 'annotations');
@@ -431,6 +436,66 @@ app.delete('/api/annotations/:docId/:id', (req, res) => {
     annotations = annotations.filter(a => a.id !== id);
     saveAnnotations(docId, annotations);
     res.json({ ok: true });
+});
+
+// ─── Studio Operations ─────────────────────────────────────
+
+app.post('/api/studio', async (req, res) => {
+    const { operation, prompt, context } = req.body;
+    if (!operation || !prompt) return res.status(400).json({ error: 'operation and prompt required' });
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+        return res.status(503).json({ error: 'No OPENAI_API_KEY configured. Add it to .env file.' });
+    }
+
+    try {
+        const OpenAI = require('openai');
+        const openai = new OpenAI({ apiKey });
+        const model = process.env.OPENAI_MODEL || 'gpt-4o';
+
+        // Set up SSE
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+
+        const systemMsg = `You are a helpful assistant for Scholarly Reader. You produce high-quality, well-structured outputs for academic paper analysis. Use markdown formatting. Be thorough and precise.`;
+
+        const messages = [
+            { role: 'system', content: systemMsg },
+        ];
+
+        if (context) {
+            messages.push({ role: 'user', content: `Here are the source papers:\n\n${context}` });
+            messages.push({ role: 'assistant', content: 'I\'ve read the source material. What would you like me to generate?' });
+        }
+
+        messages.push({ role: 'user', content: prompt });
+
+        const stream = await openai.chat.completions.create({
+            model,
+            messages,
+            stream: true,
+            max_tokens: 4096,
+        });
+
+        for await (const chunk of stream) {
+            const content = chunk.choices[0]?.delta?.content;
+            if (content) {
+                res.write(`data: ${JSON.stringify({ content })}\n\n`);
+            }
+        }
+
+        res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+        res.end();
+    } catch (err) {
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        } else {
+            res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+            res.end();
+        }
+    }
 });
 
 // --- Start ---

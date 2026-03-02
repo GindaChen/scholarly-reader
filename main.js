@@ -28,7 +28,7 @@ function createWindow() {
         },
     });
 
-    win.loadURL(`http://localhost:${PORT}`);
+    win.loadURL(`http://localhost:${PORT}/workspace`);
 
     // Open DevTools in dev mode
     if (process.argv.includes('--dev')) {
