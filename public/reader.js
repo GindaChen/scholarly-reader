@@ -821,38 +821,88 @@
     }
 
     /**
-     * Scan for <sup class="ref-badge" data-ref="N" data-title="..." data-url="..." data-quote="...">
+     * Extract a ref map from any content element (main article or split content).
+     * Returns { [num]: { num, title, url, quote, arxivId } }
      */
-    function extractReferences() {
-        // First pass: collect from ref-badges
-        article.querySelectorAll('.ref-badge[data-ref]').forEach(el => {
-            const num = el.dataset.ref;
-            if (!state.references[num]) {
-                state.references[num] = {
-                    num: parseInt(num),
-                    title: el.dataset.title || `Reference ${num}`,
-                    url: el.dataset.url || '',
-                    quote: el.dataset.quote || '',
-                    arxivId: '',
+    function extractRefsFromEl(el) {
+        const refs = {};
+        // Pass 1: ref-badge data attributes
+        el.querySelectorAll('.ref-badge[data-ref]').forEach(badge => {
+            const num = badge.dataset.ref;
+            if (!refs[num]) {
+                refs[num] = {
+                    num: parseInt(num) || num,
+                    title: badge.dataset.title || badge.dataset.arxivId || `Reference ${num}`,
+                    url: badge.dataset.url || '',
+                    quote: badge.dataset.quote || '',
+                    arxivId: badge.dataset.arxivId || '',
                 };
             }
         });
-        // Second pass: scan bibliography <li id="ref-N"> entries for arXiv IDs and URLs
-        article.querySelectorAll('li[id^="ref-"]').forEach(li => {
+        // Pass 2: enrich from bibliography <li id="ref-N">
+        el.querySelectorAll('li[id^="ref-"]').forEach(li => {
             const num = li.id.replace('ref-', '');
             const text = li.textContent || '';
             const html = li.innerHTML || '';
-            // Extract arXiv ID from text like "arXiv:1607.06450" or "arxiv.org/abs/1706.03762"
-            const arxivMatch = text.match(/arxiv[:\/]+(\d{4}\.\d{4,5}(?:v\d+)?)/i);
-            // Extract URL from any <a> tag in the entry
+            const arxivMatch = text.match(/arxiv[:/]+(\d{4}\.\d{4,5}(?:v\d+)?)/i);
             const linkMatch = html.match(/href="([^"]+)"/i);
-            if (state.references[num]) {
-                if (arxivMatch && !state.references[num].arxivId)
-                    state.references[num].arxivId = arxivMatch[1];
-                if (linkMatch && !state.references[num].url)
-                    state.references[num].url = linkMatch[1];
+            if (refs[num]) {
+                if (arxivMatch && !refs[num].arxivId) refs[num].arxivId = arxivMatch[1].split('v')[0];
+                if (linkMatch && !refs[num].url) refs[num].url = linkMatch[1];
             }
         });
+        return refs;
+    }
+
+    /** Populate state.references from main article and rebuild the panel. */
+    function extractReferences() {
+        state.references = extractRefsFromEl(article);
+    }
+
+    /**
+     * Switch the References panel to show a given ref map,
+     * optionally highlighting and showing detail for one ref.
+     * @param {object} refsMap - { [num]: ref }
+     * @param {string} [activeNum] - ref number to highlight/show detail
+     * @param {string} [paperTitle] - label for the panel header
+     */
+    function switchRefsPanel(refsMap, activeNum, paperTitle) {
+        const refList = $('#ref-list');
+        const detailView = $('#ref-detail-view');
+        if (!refList) return;
+
+        // Update panel header label if provided
+        const panelLabel = document.querySelector('#refs-panel .panel-title, #refs-panel .panel-header span');
+        if (panelLabel && paperTitle) panelLabel.textContent = paperTitle;
+
+        refList.innerHTML = '';
+        if (detailView) detailView.innerHTML = '';
+
+        const nums = Object.keys(refsMap).sort((a, b) => (parseInt(a) || 0) - (parseInt(b) || 0));
+        if (nums.length === 0) {
+            refList.innerHTML = '<li class="panel-empty">No references found.</li>';
+            return;
+        }
+
+        nums.forEach(num => {
+            const ref = refsMap[num];
+            const li = document.createElement('li');
+            li.className = 'ref-list-item';
+            li.dataset.ref = num;
+            li.innerHTML = `<span class="ref-num">[${num}]</span> <span class="ref-title">${esc(ref.title)}</span>`;
+            li.addEventListener('click', () => {
+                // Show detail using this panel's refs
+                state.references = refsMap;
+                showRefDetail(num);
+                openRefInSplitView(num);
+            });
+            refList.appendChild(li);
+        });
+
+        if (activeNum) {
+            state.references = refsMap;
+            showRefDetail(activeNum);
+        }
     }
 
     /**
@@ -1220,26 +1270,7 @@
     // ═══════════════════════════════════════════════
 
     function buildRefsPanel() {
-        const refList = $('#ref-list');
-        const nums = Object.keys(state.references).sort((a, b) => a - b);
-
-        if (nums.length === 0) {
-            refList.innerHTML = '<li class="panel-empty">No references in this document.</li>';
-            return;
-        }
-
-        nums.forEach(num => {
-            const ref = state.references[num];
-            const li = document.createElement('li');
-            li.className = 'ref-list-item';
-            li.dataset.ref = num;
-            li.innerHTML = `<span class="ref-num">[${num}]</span> <span class="ref-title">${esc(ref.title)}</span>`;
-            li.addEventListener('click', () => {
-                showRefDetail(num);
-                openRefInSplitView(num);
-            });
-            refList.appendChild(li);
-        });
+        switchRefsPanel(state.references, null, state.docId);
     }
 
     function showRefDetail(num) {
@@ -1454,7 +1485,9 @@
             if (badge) {
                 panelRefs.classList.remove('collapsed');
                 $('#refs-toggle').classList.add('active');
-                showRefDetail(badge.dataset.ref);
+                // Restore main article refs panel whenever clicking in the main article
+                switchRefsPanel(state.references, badge.dataset.ref, state.docId);
+                openRefInSplitView(badge.dataset.ref);
             }
         });
     }
@@ -2825,15 +2858,16 @@
         });
 
         // --- 4. Wire clicks on existing + newly created ref-badges ---
+        // Build a complete refsMap from this split content for panel switching
+        const splitRefsMap = extractRefsFromEl(el);
+
         el.querySelectorAll('.ref-badge[data-ref]').forEach(badge => {
             badge.addEventListener('click', () => {
                 const num = badge.dataset.ref;
-                const ref = refMap[num];
-                // Temporarily inject into state.references so showRefDetail works
-                if (ref && !state.references[num]) {
-                    state.references[num] = { num: parseInt(num) || 0, title: ref.title, url: ref.url || '', quote: '' };
-                }
-                showRefDetail(num);
+                // Switch the right panel to show THIS paper's references
+                const panelTitle = el.closest('.split-view')?.querySelector('.split-title')?.textContent || '';
+                switchRefsPanel(splitRefsMap, num, panelTitle);
+                openRefInSplitView(num);
             });
         });
     }
