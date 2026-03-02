@@ -381,7 +381,17 @@ function extractBibliography(bibTex) {
         refs.push({ key, authors, title, venue });
     }
 
-    return refs;
+    // Deduplicate: remove entries with same title (keep first occurrence)
+    const seen = new Set();
+    const deduped = [];
+    for (const ref of refs) {
+        const key = ref.title.toLowerCase().replace(/[^a-z0-9]/g, '').substring(0, 40);
+        if (key && seen.has(key)) continue;
+        if (key) seen.add(key);
+        deduped.push(ref);
+    }
+
+    return deduped;
 }
 
 function cleanRemainingLatex(tex) {
