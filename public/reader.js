@@ -2390,7 +2390,7 @@
         splitView.id = newId;
 
         splitView.innerHTML = `
-            <div class="split-view-header" draggable="true" title="Drag to reorder">
+            <div class="split-view-header" title="Drag to reorder">
                 <span class="split-title">${label || `Split View ${splitCount}`}</span>
                 <div class="split-view-actions">
                     <button class="btn-close-split" title="Close Split">
@@ -2623,7 +2623,7 @@
 
         // --- 3. Walk text nodes and replace [key] or [N] with ref-badge spans ---
         // Matches: [1], [ba2016layer], [1, 2], [key1, key2]
-        const citePat = /(\[[\w:.,\s-]{1,200}\])/g;
+        const citeTest = /\[[\w:.,\s-]{1,200}\]/; // non-global for acceptNode
 
         const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
@@ -2633,7 +2633,7 @@
                 if (['SCRIPT','STYLE','SUP','MATH','CODE','PRE'].includes(tag)) return NodeFilter.FILTER_REJECT;
                 if (parent.classList.contains('ref-badge')) return NodeFilter.FILTER_REJECT;
                 if (parent.closest('.katex,.math-inline,.math-display,.katex-display')) return NodeFilter.FILTER_REJECT;
-                return citePat.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                return citeTest.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
             }
         });
 
@@ -2645,7 +2645,7 @@
             const frag = document.createDocumentFragment();
             let last = 0;
             let m;
-            citePat.lastIndex = 0;
+            const citePat = /(\[[\w:.,\s-]{1,200}\])/g; // fresh global per node
             const text = node.textContent;
             while ((m = citePat.exec(text)) !== null) {
                 if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
@@ -2695,90 +2695,103 @@
     }
 
     /**
-     * Chrome-style tab drag-to-reorder for split views.
-     * - Smooth placeholder indicator shows drop position
-     * - Tab header turns into a "detached" ghost while dragging
-     * - Drop snaps into exact position between panels
+     * Chrome-style tab drag-to-reorder via pointer events (more reliable than HTML5 drag API).
+     * - Dragging the header shows a floating ghost clone following the cursor
+     * - A slim insertion-line placeholder tracks the drop position between panels
+     * - Release drops the panel into the indicated position
      */
     function setupSplitDragReorder() {
         const container = $('#split-container');
         if (!container) return;
 
         let dragSrc = null;
-        let placeholder = null;
+        let ghost = null;
+        let indicator = null;
+        let startX = 0, startY = 0;
+        let dragging = false;
 
-        function createPlaceholder(width) {
-            const ph = document.createElement('div');
-            ph.className = 'split-view split-drag-placeholder';
-            ph.style.cssText = `width:${width}px;min-width:${width}px;opacity:0;border:2px dashed var(--accent,#7c6af7);border-radius:6px;pointer-events:none;transition:opacity 0.1s;`;
-            return ph;
-        }
-
-        container.addEventListener('dragstart', e => {
-            const header = e.target.closest('.split-view-header');
-            if (!header) return;
-            dragSrc = header.closest('.split-view');
-            const w = dragSrc.offsetWidth;
-
-            // Ghost image: just the header bar
-            const ghost = header.cloneNode(true);
-            ghost.style.cssText = `position:fixed;top:-9999px;left:0;width:${w}px;background:var(--surface-2,#2a2a3c);border-radius:6px 6px 0 0;padding:6px 12px;box-shadow:0 4px 16px rgba(0,0,0,0.4);`;
-            document.body.appendChild(ghost);
-            e.dataTransfer.setDragImage(ghost, w / 2, 20);
-            setTimeout(() => ghost.remove(), 0);
-
-            e.dataTransfer.effectAllowed = 'move';
-
-            // Show placeholder
-            placeholder = createPlaceholder(w);
-            container.insertBefore(placeholder, dragSrc.nextSibling);
-            setTimeout(() => {
-                dragSrc.style.opacity = '0.4';
-                dragSrc.style.transition = 'opacity 0.15s';
-                placeholder.style.opacity = '1';
-            }, 0);
-        });
-
-        container.addEventListener('dragover', e => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            if (!dragSrc || !placeholder) return;
-
-            const splits = [...container.querySelectorAll('.split-view:not(.split-drag-placeholder)')];
-            let insertBefore = null;
-
+        function getInsertTarget(clientX) {
+            const splits = [...container.querySelectorAll('.split-view:not(.drag-indicator)')];
             for (const sv of splits) {
                 if (sv === dragSrc) continue;
                 const rect = sv.getBoundingClientRect();
-                const mid = rect.left + rect.width / 2;
-                if (e.clientX < mid) { insertBefore = sv; break; }
+                if (clientX < rect.left + rect.width / 2) return { before: sv };
             }
+            return { before: null }; // append at end
+        }
 
-            if (insertBefore) {
-                container.insertBefore(placeholder, insertBefore);
-            } else {
-                container.appendChild(placeholder);
-            }
-        });
-
-        container.addEventListener('drop', e => {
+        container.addEventListener('pointerdown', e => {
+            const header = e.target.closest('.split-view-header');
+            if (!header) return;
+            // Don't drag if clicking the close button
+            if (e.target.closest('.btn-close-split')) return;
+            dragSrc = header.closest('.split-view');
+            startX = e.clientX;
+            startY = e.clientY;
+            dragging = false;
+            container.setPointerCapture(e.pointerId);
             e.preventDefault();
-            if (!dragSrc || !placeholder) return;
-            container.insertBefore(dragSrc, placeholder);
-            placeholder.remove();
-            placeholder = null;
-            dragSrc.style.opacity = '';
-            dragSrc.style.transition = '';
-            dragSrc = null;
         });
 
-        container.addEventListener('dragend', () => {
-            if (placeholder) { placeholder.remove(); placeholder = null; }
-            if (dragSrc) {
-                dragSrc.style.opacity = '';
-                dragSrc.style.transition = '';
-                dragSrc = null;
+        container.addEventListener('pointermove', e => {
+            if (!dragSrc) return;
+            const dx = e.clientX - startX, dy = e.clientY - startY;
+
+            if (!dragging && Math.sqrt(dx*dx + dy*dy) < 6) return;
+
+            if (!dragging) {
+                dragging = true;
+                // Create ghost
+                ghost = dragSrc.cloneNode(true);
+                ghost.style.cssText = `
+                    position:fixed;pointer-events:none;z-index:9999;
+                    width:${dragSrc.offsetWidth}px;height:${dragSrc.offsetHeight}px;
+                    opacity:0.85;box-shadow:0 8px 32px rgba(0,0,0,0.45);
+                    border-radius:6px;top:${dragSrc.getBoundingClientRect().top}px;
+                    left:${dragSrc.getBoundingClientRect().left}px;
+                    transition:none;background:var(--surface-1,#1e1e2e);
+                `;
+                document.body.appendChild(ghost);
+                dragSrc.style.opacity = '0.3';
+
+                // Create thin insertion indicator
+                indicator = document.createElement('div');
+                indicator.className = 'drag-indicator';
+                indicator.style.cssText = `
+                    width:3px;min-width:3px;align-self:stretch;flex-shrink:0;
+                    background:var(--accent,#7c6af7);border-radius:3px;
+                    margin:4px 0;pointer-events:none;
+                    box-shadow:0 0 8px var(--accent,#7c6af7);
+                `;
+                container.appendChild(indicator);
             }
+
+            // Move ghost
+            ghost.style.top = (dragSrc.getBoundingClientRect().top + (e.clientY - startY)) + 'px';
+            ghost.style.left = (dragSrc.getBoundingClientRect().left + (e.clientX - startX)) + 'px';
+
+            // Update indicator position
+            const { before } = getInsertTarget(e.clientX);
+            if (before) container.insertBefore(indicator, before);
+            else container.appendChild(indicator);
+        });
+
+        container.addEventListener('pointerup', e => {
+            if (!dragSrc) return;
+            if (dragging && indicator) {
+                container.insertBefore(dragSrc, indicator);
+                indicator.remove();
+                ghost.remove();
+                dragSrc.style.opacity = '';
+            }
+            dragSrc = null; ghost = null; indicator = null; dragging = false;
+        });
+
+        container.addEventListener('pointercancel', () => {
+            if (ghost) ghost.remove();
+            if (indicator) indicator.remove();
+            if (dragSrc) dragSrc.style.opacity = '';
+            dragSrc = null; ghost = null; indicator = null; dragging = false;
         });
     }
 

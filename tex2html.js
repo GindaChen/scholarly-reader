@@ -258,12 +258,16 @@ function convertLists(tex) {
 }
 
 function convertTables(tex) {
-    tex = tex.replace(/\\begin\{table\}[\s\S]*?\\begin\{tabular\}\{([^}]*)\}([\s\S]*?)\\end\{tabular\}[\s\S]*?\\end\{table\}/g, (_, cols, content) => {
-        return convertTabular(content);
+    // table/table* wrapper + any tabular variant inside
+    tex = tex.replace(/\begin{table*?}([sS]*?)\end{table*?}/g, (_, inner) => {
+        const caption = (inner.match(/\caption{([sS]*?)}/) || [])[1] || '';
+        const tabMatch = inner.match(/\begin{(tabular[xy]?|tabulary|longtable)}(?:{[^}]*}){1,2}([sS]*?)\end{(?:tabular[xy]?|tabulary|longtable)}/);
+        const tableHtml = tabMatch ? convertTabular(tabMatch[2]) : '';
+        return '<figure>' + tableHtml + (caption ? '<figcaption>' + cleanText(caption) + '</figcaption>' : '') + '</figure>';
     });
 
-    // Standalone tabular
-    tex = tex.replace(/\\begin\{tabular\}\{([^}]*)\}([\s\S]*?)\\end\{tabular\}/g, (_, cols, content) => {
+    // Standalone tabular / tabulary / tabularx / longtable
+    tex = tex.replace(/\begin{(tabular[xy]?|tabulary|longtable)}(?:{[^}]*}){1,2}([sS]*?)\end{(?:tabular[xy]?|tabulary|longtable)}/g, (_, _env, content) => {
         return convertTabular(content);
     });
 
@@ -404,9 +408,13 @@ function extractBibliography(bibTex) {
 }
 
 function cleanRemainingLatex(tex) {
-    // Remove remaining \begin/\end blocks we don't handle
-    tex = tex.replace(/\\begin\{[^}]+\}(\[.*?\])?/g, '');
-    tex = tex.replace(/\\end\{[^}]+\}/g, '');
+    // Remove entire unhandled \begin{env}...\end{env} blocks
+    // Repeat a few times to catch nested ones
+    for (let i = 0; i < 4; i++) {
+        tex = tex.replace(/\begin\{(?!document|itemize|enumerate|description)[^}]+\}(?:\[[^\]]*\])?(?:\{[^}]*\})?[\s\S]*?\end\{(?!document|itemize|enumerate|description)[^}]+\}/g, '');
+    }
+    tex = tex.replace(/\begin\{[^}]+\}(\[.*?\])?/g, '');
+    tex = tex.replace(/\end\{[^}]+\}/g, '');
 
     // Remove \vspace, \hspace, \noindent, etc.
     tex = tex.replace(/\\(vspace|hspace|noindent|centering|raggedright|raggedleft|small|large|Large|normalsize|bigskip|medskip|smallskip|newpage|clearpage|pagebreak)\b(\{[^}]*\})?/g, '');
