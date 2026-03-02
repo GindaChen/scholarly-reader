@@ -488,6 +488,78 @@ app.post('/api/import-arxiv', async (req, res) => {
     }
 });
 
+app.get('/api/paper-search', async (req, res) => {
+    const { title } = req.query;
+    if (!title) return res.status(400).json({ error: 'title required' });
+
+    const results = [];
+
+    // 1. arXiv exact title search
+    try {
+        const encoded = encodeURIComponent(`"${title}"`);
+        const xml = await fetch(`https://export.arxiv.org/api/query?search_query=ti:${encoded}&max_results=2`).then(r => r.text());
+        const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+        let m;
+        while ((m = entryRegex.exec(xml)) !== null) {
+            const entry = m[1];
+            const idMatch = entry.match(/<id>http:\/\/arxiv\.org\/abs\/([\w.]+)<\/id>/);
+            const titleMatch = entry.match(/<title>([\s\S]*?)<\/title>/);
+            if (idMatch && titleMatch) {
+                results.push({
+                    source: 'arxiv',
+                    arxivId: idMatch[1].split('v')[0],
+                    title: titleMatch[1].replace(/\s+/g, ' ').trim(),
+                    url: `https://arxiv.org/abs/${idMatch[1]}`,
+                    pdfUrl: `https://arxiv.org/pdf/${idMatch[1]}`,
+                });
+            }
+        }
+    } catch (e) { /* ignore */ }
+
+    // 2. Semantic Scholar (if arXiv found nothing useful)
+    if (results.length === 0) {
+        try {
+            const ssUrl = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(title)}&fields=title,externalIds,openAccessPdf,year&limit=3`;
+            const data = await fetch(ssUrl, { headers: { 'User-Agent': 'scholarly-reader/1.0' } }).then(r => r.json());
+            (data.data || []).forEach(paper => {
+                const arxivId = paper.externalIds?.ArXiv;
+                const pdfUrl = paper.openAccessPdf?.url || null;
+                results.push({
+                    source: arxivId ? 'arxiv' : 'semantic-scholar',
+                    arxivId: arxivId || null,
+                    title: paper.title,
+                    url: arxivId ? `https://arxiv.org/abs/${arxivId}` : (pdfUrl || ''),
+                    pdfUrl,
+                    year: paper.year,
+                    paperId: paper.paperId,
+                });
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    // 3. CrossRef (last resort — provides DOI + metadata but rarely a PDF)
+    if (results.length === 0) {
+        try {
+            const crUrl = `https://api.crossref.org/works?query.title=${encodeURIComponent(title)}&rows=2&select=title,DOI,URL,link`;
+            const data = await fetch(crUrl).then(r => r.json());
+            (data.message?.items || []).forEach(item => {
+                const t = (item.title || [])[0] || title;
+                const pdfLink = (item.link || []).find(l => l['content-type'] === 'application/pdf');
+                results.push({
+                    source: 'crossref',
+                    arxivId: null,
+                    title: t,
+                    url: item.URL || `https://doi.org/${item.DOI}`,
+                    pdfUrl: pdfLink?.URL || null,
+                    doi: item.DOI,
+                });
+            });
+        } catch (e) { /* ignore */ }
+    }
+
+    res.json({ results });
+});
+
 app.get('/api/arxiv-search', async (req, res) => {
     const { title } = req.query;
     if (!title) return res.status(400).json({ error: 'title required' });

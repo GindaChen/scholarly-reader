@@ -2685,32 +2685,59 @@
         return m ? m[1] : null;
     }
 
-    /** Search arXiv by title, pick the best match, then import automatically. */
+    /** Search across arXiv → Semantic Scholar → CrossRef, then import or show metadata. */
     async function searchAndImportInSplit(title, num, label, contentEl) {
         contentEl.innerHTML = `
             <div style="padding:2rem;text-align:center;">
-                <p>🔍 Searching arXiv for <strong>${esc(title)}</strong>…</p>
+                <p>🔍 Searching for <strong>${esc(title)}</strong>…</p>
+                <p style="color:var(--text-muted,#888);font-size:13px;margin-top:0.5rem;">Trying arXiv → Semantic Scholar → CrossRef</p>
             </div>`;
-        let arxivId = null;
+
+        let best = null;
         try {
-            const data = await fetchJSON(`/api/arxiv-search?title=${encodeURIComponent(title)}`);
-            if (data.results && data.results.length > 0) {
-                arxivId = data.results[0].arxivId;
-            }
+            const data = await fetchJSON(`/api/paper-search?title=${encodeURIComponent(title)}`);
+            best = (data.results || [])[0] || null;
         } catch (e) { /* ignore */ }
 
-        if (arxivId) {
-            await importAndLoadInSplit(arxivId, title, label, contentEl);
+        if (best?.arxivId) {
+            // Have an arXiv ID — import via pipeline
+            await importAndLoadInSplit(best.arxivId, best.title || title, label, contentEl);
+        } else if (best?.pdfUrl) {
+            // Have a direct PDF link but no arXiv — show card with open button
+            contentEl.innerHTML = `
+                <div class="ref-detail" style="padding:1.5rem;">
+                    <div class="ref-detail-title">[${num}] ${esc(best.title || title)}</div>
+                    ${best.url ? `<a class="ref-detail-link" href="${esc(best.url)}" target="_blank" rel="noopener">${esc(best.url)}</a>` : ''}
+                    <p class="panel-empty" style="margin-top:1rem;">
+                        📄 Found via ${esc(best.source)} — not on arXiv, but an open-access PDF is available.
+                    </p>
+                    <a href="${esc(best.pdfUrl)}" target="_blank" rel="noopener"
+                       style="display:inline-block;margin-top:0.75rem;padding:0.4rem 1rem;background:var(--accent,#7c6af7);color:#fff;border-radius:6px;text-decoration:none;font-size:13px;">
+                        📥 Open PDF
+                    </a>
+                    ${best.doi ? `<p style="margin-top:0.5rem;font-size:12px;color:var(--text-muted,#888);">DOI: ${esc(best.doi)}</p>` : ''}
+                </div>`;
+        } else if (best) {
+            // Found metadata only (no PDF)
+            contentEl.innerHTML = `
+                <div class="ref-detail" style="padding:1.5rem;">
+                    <div class="ref-detail-title">[${num}] ${esc(best.title || title)}</div>
+                    ${best.url ? `<a class="ref-detail-link" href="${esc(best.url)}" target="_blank" rel="noopener">${esc(best.url)}</a>` : ''}
+                    <p class="panel-empty" style="margin-top:1rem;">
+                        📄 Found via ${esc(best.source)}${best.year ? ` (${best.year})` : ''} — no open-access PDF available.
+                    </p>
+                    ${best.doi ? `<p style="font-size:12px;color:var(--text-muted,#888);">DOI: ${esc(best.doi)}</p>` : ''}
+                </div>`;
         } else {
-            // Still nothing — show a small manual fallback
+            // Nothing found anywhere — manual fallback
             contentEl.innerHTML = `
                 <div class="ref-detail" style="padding:1.5rem;">
                     <div class="ref-detail-title">[${num}] ${esc(title)}</div>
                     <p class="panel-empty" style="margin-top:1rem;">
-                        🔍 Couldn't find this paper on arXiv automatically.
+                        🔍 Couldn't find this paper on arXiv, Semantic Scholar, or CrossRef.
                     </p>
                     <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
-                        <input id="manual-arxiv-input" class="var-editor-input" placeholder="Enter arXiv ID manually (e.g. 1706.03762)" style="flex:1;padding:0.4rem 0.6rem;font-size:13px;" />
+                        <input id="manual-arxiv-input" class="var-editor-input" placeholder="Paste arXiv ID or PDF URL" style="flex:1;padding:0.4rem 0.6rem;font-size:13px;" />
                         <button id="manual-arxiv-btn" class="ctx-item" style="padding:0.4rem 0.8rem;cursor:pointer;">Import</button>
                     </div>
                 </div>`;
