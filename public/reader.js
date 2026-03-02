@@ -2464,32 +2464,8 @@
             if (arxivId) {
                 await importAndLoadInSplit(arxivId, ref.title, label, contentEl);
             } else {
-                // No arXiv ID found — show ref metadata with manual import option
-                const urlHtml = ref.url
-                    ? `<a class="ref-detail-link" href="${esc(ref.url)}" target="_blank" rel="noopener">${esc(ref.url)}</a>`
-                    : '';
-                const quoteHtml = ref.quote
-                    ? `<div class="ref-detail-quote">${esc(ref.quote)}</div>`
-                    : '';
-                contentEl.innerHTML = `
-                    <div class="ref-detail" style="padding:1.5rem;">
-                        <div class="ref-detail-title">[${num}] ${esc(ref.title)}</div>
-                        ${urlHtml}
-                        ${quoteHtml}
-                        <p class="panel-empty" style="margin-top:1.5rem;">
-                            📄 This paper is not available locally and no arXiv ID was found.<br>
-                            ${ref.url ? 'Open the link above to read it.' : 'No URL recorded for this reference.'}
-                        </p>
-                        <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
-                            <input id="manual-arxiv-input" class="var-editor-input" placeholder="Enter arXiv ID (e.g. 1706.03762)" style="flex:1;padding:0.4rem 0.6rem;font-size:13px;" />
-                            <button id="manual-arxiv-btn" class="ctx-item" style="padding:0.4rem 0.8rem;cursor:pointer;">Import</button>
-                        </div>
-                    </div>`;
-                contentEl.querySelector('#manual-arxiv-btn').addEventListener('click', async () => {
-                    const id = contentEl.querySelector('#manual-arxiv-input').value.trim();
-                    if (!id) return;
-                    await importAndLoadInSplit(id, ref.title, label, contentEl);
-                });
+                // No arXiv ID found — auto-search arXiv by title
+                await searchAndImportInSplit(ref.title, num, label, contentEl);
             }
         }
     }
@@ -2499,6 +2475,43 @@
         if (!str) return null;
         const m = str.match(/(?:arxiv\.org\/(?:abs|pdf)\/|arxiv:)?(\d{4}\.\d{4,5}(?:v\d+)?)/i);
         return m ? m[1] : null;
+    }
+
+    /** Search arXiv by title, pick the best match, then import automatically. */
+    async function searchAndImportInSplit(title, num, label, contentEl) {
+        contentEl.innerHTML = `
+            <div style="padding:2rem;text-align:center;">
+                <p>🔍 Searching arXiv for <strong>${esc(title)}</strong>…</p>
+            </div>`;
+        let arxivId = null;
+        try {
+            const data = await fetchJSON(`/api/arxiv-search?title=${encodeURIComponent(title)}`);
+            if (data.results && data.results.length > 0) {
+                arxivId = data.results[0].arxivId;
+            }
+        } catch (e) { /* ignore */ }
+
+        if (arxivId) {
+            await importAndLoadInSplit(arxivId, title, label, contentEl);
+        } else {
+            // Still nothing — show a small manual fallback
+            contentEl.innerHTML = `
+                <div class="ref-detail" style="padding:1.5rem;">
+                    <div class="ref-detail-title">[${num}] ${esc(title)}</div>
+                    <p class="panel-empty" style="margin-top:1rem;">
+                        🔍 Couldn't find this paper on arXiv automatically.
+                    </p>
+                    <div style="margin-top:1rem;display:flex;gap:0.5rem;align-items:center;">
+                        <input id="manual-arxiv-input" class="var-editor-input" placeholder="Enter arXiv ID manually (e.g. 1706.03762)" style="flex:1;padding:0.4rem 0.6rem;font-size:13px;" />
+                        <button id="manual-arxiv-btn" class="ctx-item" style="padding:0.4rem 0.8rem;cursor:pointer;">Import</button>
+                    </div>
+                </div>`;
+            contentEl.querySelector('#manual-arxiv-btn').addEventListener('click', async () => {
+                const id = contentEl.querySelector('#manual-arxiv-input').value.trim();
+                if (!id) return;
+                await importAndLoadInSplit(id, title, label, contentEl);
+            });
+        }
     }
 
     /** Trigger arXiv import pipeline, poll for completion, then load into the split content area. */

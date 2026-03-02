@@ -488,6 +488,35 @@ app.post('/api/import-arxiv', async (req, res) => {
     }
 });
 
+app.get('/api/arxiv-search', async (req, res) => {
+    const { title } = req.query;
+    if (!title) return res.status(400).json({ error: 'title required' });
+    try {
+        const encoded = encodeURIComponent(`"${title}"`);
+        const url = `https://export.arxiv.org/api/query?search_query=ti:${encoded}&max_results=3`;
+        const response = await fetch(url);
+        const xml = await response.text();
+        // Parse entries from Atom XML
+        const entries = [];
+        const entryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+        let m;
+        while ((m = entryRegex.exec(xml)) !== null) {
+            const entry = m[1];
+            const idMatch = entry.match(/<id>http:\/\/arxiv\.org\/abs\/([\w.]+)<\/id>/);
+            const titleMatch = entry.match(/<title>([\s\S]*?)<\/title>/);
+            if (idMatch && titleMatch) {
+                entries.push({
+                    arxivId: idMatch[1].replace('v\d+$', '').split('v')[0],
+                    title: titleMatch[1].replace(/\s+/g, ' ').trim(),
+                });
+            }
+        }
+        res.json({ results: entries });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/import-status/:jobId', (req, res) => {
     const job = importJobs.get(req.params.jobId);
     if (!job) return res.status(404).json({ error: 'Job not found' });
