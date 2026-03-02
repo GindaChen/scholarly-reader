@@ -86,8 +86,25 @@ function resolveInputs(filePath, baseDir) {
 }
 
 function extractMetadata(fullTex) {
-    const titleMatch = fullTex.match(/\\title\{([^}]+)\}/);
-    const title = titleMatch ? titleMatch[1].replace(/\\\\/g, '').trim() : 'Untitled Paper';
+    // Try various conference/journal title macros in order of preference
+    const titlePatterns = [
+        /\\title\{([^}]+)\}/,
+        /\\icmltitle\{([^}]+)\}/,
+        /\\Title\{([^}]+)\}/,
+        /\\shorttitle\{([^}]+)\}/,
+        /\\runtitle\{([^}]+)\}/,
+        /\\icmltitlerunning\{([^}]+)\}/,
+        /\\acmtitle\{([^}]+)\}/,
+    ];
+    let title = 'Untitled Paper';
+    for (const pat of titlePatterns) {
+        const m = fullTex.match(pat);
+        if (m && m[1].trim() && m[1].trim() !== 'Untitled Paper') {
+            title = m[1].replace(/\\\\/g, '').replace(/[{}]/g, '').trim();
+            break;
+        }
+    }
+
 
     const authorMatch = fullTex.match(/\\author\{([\s\S]*?)\}/);
     let authors = [];
