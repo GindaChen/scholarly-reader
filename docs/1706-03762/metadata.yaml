@@ -1,58 +1,172 @@
-title: Attention Is All You Need
-short_title: Attention Is All You Need
-type: journal-article
+title: "Attention Is All You Need"
+short_title: "Attention Is All You Need"
+type: conference-paper
 authors:
-  - given: with
-    family: Illia
-  - given: >-
-      designed and implemented the first Transformer models and has been crucially involved in every
-      aspect of this work. Noam proposed scaled dot-product
-    family: attention
-  - given: >-
-      multi-head attention and the parameter-free position representation and became the other
-      person involved in nearly every detail. Niki
-    family: designed
-  - given: ''
-    family: implemented
-  - given: >-
-      tuned and evaluated countless model variants in our original codebase and tensor2tensor. Llion
-      also experimented with novel model
-    family: variants
-  - given: was responsible for our initial
-    family: codebase
-  - given: >-
-      and efficient inference and visualizations. Lukasz and Aidan spent countless long days
-      designing various parts of and implementing
-    family: tensor2tensor
-  - given: replacing our earlier
-    family: codebase
-  - given: greatly improving results and massively accelerating our
-    family: research.
-date: '2026-03-02'
-url: https://arxiv.org/abs/1706.03762
-pdf: https://arxiv.org/pdf/1706.03762
-arxiv_id: '1706.03762'
+  - given: Ashish
+    family: Vaswani
+    affiliation: Google Brain
+  - given: Noam
+    family: Shazeer
+    affiliation: Google Brain
+  - given: Niki
+    family: Parmar
+    affiliation: Google Research
+  - given: Jakob
+    family: Uszkoreit
+    affiliation: Google Research
+  - given: Llion
+    family: Jones
+    affiliation: Google Research
+  - given: Aidan N.
+    family: Gomez
+    affiliation: University of Toronto
+  - given: Łukasz
+    family: Kaiser
+    affiliation: Google Brain
+  - given: Illia
+    family: Polosukhin
+    affiliation: Independent
+
+date: 2017-06-12
+year: 2017
+venue: "NeurIPS 2017 (Advances in Neural Information Processing Systems 30)"
+url: "https://arxiv.org/abs/1706.03762"
+pdf: "https://arxiv.org/pdf/1706.03762"
+arxiv_id: "1706.03762"
 archive: arxiv
-archive_url: https://arxiv.org/abs/1706.03762
-source: arxiv-pipeline
-pipeline_version: '2.0'
+source: paper-agent
+
 tags:
-  - auto-imported
-  - arxiv-pipeline
-abstract: >-
-  The dominant sequence transduction models are based on complex recurrent or convolutional neural
-  networks that include an encoder and a decoder. The best performing models also connect the
-  encoder and decoder through an attention mechanism. We propose a new simple network architecture,
-  the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions
-  entirely. Experiments on two machine translation tasks show these models to be superior in quality
-  while being  mo
+  - transformer
+  - attention mechanism
+  - self-attention
+  - multi-head attention
+  - machine translation
+  - natural language processing
+  - neural machine translation
+  - sequence-to-sequence
+  - positional encoding
+  - deep learning
+  - encoder-decoder
+
+abstract: >
+  The dominant sequence transduction models are based on complex recurrent or
+  convolutional neural networks that include an encoder and a decoder. The best
+  performing models also connect the encoder and decoder through an attention
+  mechanism. We propose a new simple network architecture, the Transformer,
+  based solely on attention mechanisms, dispensing with recurrence and
+  convolutions entirely. Experiments on two machine translation tasks show these
+  models to be superior in quality while being more parallelizable and requiring
+  significantly less time to train. Our model achieves 28.4 BLEU on the WMT
+  2014 English-to-German translation task, improving over the existing best
+  results, including ensembles, by over 2 BLEU. On the WMT 2014
+  English-to-French translation task, our model establishes a new single-model
+  state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight
+  GPUs, a small fraction of the training costs of the best models from the
+  literature. We show that the Transformer generalizes well to other tasks by
+  applying it successfully to English constituency parsing both with large and
+  limited training data.
+
 files:
   - name: paper.html
     format: html
-    description: Rendered with KaTeX math and extracted figures
+    description: "Agent-generated annotated HTML with KaTeX math and variable annotations"
     primary: true
-variable_count: 0
-equation_count: 16
-reference_count: 40
-sections: 10
-figures: 6
+
+# Annotation statistics
+variable_count: 32
+equation_count: 8
+inline_math_count: 29
+reference_count: 44
+sections: 7
+figures: 5
+tables: 4
+
+# Key variables annotated
+variables:
+  - symbol: "Q"
+    description: "Query matrix — packed query vectors (shape: seq_len × d_k)"
+    color: "#f0a050"
+  - symbol: "K"
+    description: "Key matrix — packed key vectors (shape: seq_len × d_k)"
+    color: "#58a6ff"
+  - symbol: "V"
+    description: "Value matrix — packed value vectors (shape: seq_len × d_v)"
+    color: "#56d4dd"
+  - symbol: "d_k"
+    description: "Dimension of query and key vectors per head (default: 64)"
+    color: "#58a6ff"
+  - symbol: "d_v"
+    description: "Dimension of value vectors per head (default: 64)"
+    color: "#56d4dd"
+  - symbol: "d_model"
+    description: "Model dimensionality — size of all embedding and hidden layers (default: 512)"
+    color: "#ffd700"
+  - symbol: "d_ff"
+    description: "Inner dimension of position-wise feed-forward network (default: 2048)"
+    color: "#d2a8ff"
+  - symbol: "h"
+    description: "Number of parallel attention heads (default: 8)"
+    color: "#d2a8ff"
+  - symbol: "N"
+    description: "Number of identical layers in encoder/decoder stack (default: 6)"
+    color: "#ffd700"
+  - symbol: "W_i^Q"
+    description: "Query projection matrix for head i (shape: d_model × d_k)"
+    color: "#f0a050"
+  - symbol: "W_i^K"
+    description: "Key projection matrix for head i (shape: d_model × d_k)"
+    color: "#58a6ff"
+  - symbol: "W_i^V"
+    description: "Value projection matrix for head i (shape: d_model × d_v)"
+    color: "#56d4dd"
+  - symbol: "W^O"
+    description: "Output projection matrix (shape: h·d_v × d_model)"
+    color: "#7ee787"
+  - symbol: "W_1, W_2"
+    description: "FFN weight matrices"
+    color: "#f0a050"
+  - symbol: "b_1, b_2"
+    description: "FFN bias vectors"
+    color: "#58a6ff"
+  - symbol: "pos"
+    description: "Token position in the sequence (0-indexed)"
+    color: "#ff7b72"
+  - symbol: "PE"
+    description: "Positional encoding vector"
+    color: "#ff9bce"
+  - symbol: "h_t"
+    description: "Hidden state at time step t in RNN"
+    color: "#f0a050"
+  - symbol: "P_drop"
+    description: "Dropout probability (base: 0.1, big: 0.3)"
+    color: "#ffd700"
+  - symbol: "epsilon_ls"
+    description: "Label smoothing parameter (default: 0.1)"
+    color: "#d2a8ff"
+  - symbol: "beta_1, beta_2"
+    description: "Adam optimizer moment decay rates"
+    color: "#ff7b72"
+  - symbol: "alpha"
+    description: "Beam search length penalty exponent (default: 0.6)"
+    color: "#ff7b72"
+  - symbol: "n"
+    description: "Sequence length"
+    color: "#f0a050"
+  - symbol: "d"
+    description: "Representation dimensionality"
+    color: "#ffd700"
+  - symbol: "k"
+    description: "Convolution kernel size"
+    color: "#79c0ff"
+  - symbol: "r"
+    description: "Restricted self-attention neighborhood radius"
+    color: "#56d4dd"
+
+# Key results
+results:
+  WMT2014_EN_DE_BLEU: 28.4
+  WMT2014_EN_FR_BLEU: 41.8
+  WSJ_parsing_F1_semi: 92.7
+  training_time_big: "3.5 days on 8 P100 GPUs"
+  training_cost_big_flops: "2.3e19"
