@@ -142,7 +142,7 @@
 <h2>1. Introduction</h2>
 
 <p>
-  Recurrent neural networks, long short-term memory <sup class="ref-badge" data-ref="13" data-title="Long Short-Term Memory">13</sup> and gated recurrent <sup class="ref-badge" data-ref="7" data-title="Empirical Evaluation of Gated Recurrent Neural Networks">7</sup> neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation <sup class="ref-badge" data-ref="35" data-title="Sequence to Sequence Learning with Neural Networks">35</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="5" data-title="Learning Phrase Representations using RNN Encoder-Decoder">5</sup>. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures <sup class="ref-badge" data-ref="41" data-title="Google's Neural Machine Translation System">42</sup><sup class="ref-badge" data-ref="25" data-title="Effective Approaches to Attention-based NMT">25</sup><sup class="ref-badge" data-ref="16" data-title="Exploring the Limits of Language Modeling">16</sup>.
+  Recurrent neural networks, long short-term memory <sup class="ref-badge" data-ref="13" data-title="Long Short-Term Memory">13</sup> and gated recurrent <sup class="ref-badge" data-ref="7" data-title="Empirical Evaluation of Gated Recurrent Neural Networks">7</sup> neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation <sup class="ref-badge" data-ref="35" data-title="Sequence to Sequence Learning with Neural Networks">35</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="5" data-title="Learning Phrase Representations using RNN Encoder-Decoder">5</sup>. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures <sup class="ref-badge" data-ref="40" data-title="Google's Neural Machine Translation System">42</sup><sup class="ref-badge" data-ref="25" data-title="Effective Approaches to Attention-based NMT">25</sup><sup class="ref-badge" data-ref="16" data-title="Exploring the Limits of Language Modeling">16</sup>.
 </p>
 
 <p>
@@ -296,7 +296,7 @@
 
 <p>The Transformer uses multi-head attention in three different ways:</p>
 <ul>
-  <li>In <strong>"encoder-decoder attention"</strong> layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. This allows every position in the decoder to attend over all positions in the input sequence. This mimics the typical encoder-decoder attention mechanisms in sequence-to-sequence models <sup class="ref-badge" data-ref="41" data-title="Google's NMT System">42</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup>.</li>
+  <li>In <strong>"encoder-decoder attention"</strong> layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. This allows every position in the decoder to attend over all positions in the input sequence. This mimics the typical encoder-decoder attention mechanisms in sequence-to-sequence models <sup class="ref-badge" data-ref="40" data-title="Google's NMT System">42</sup><sup class="ref-badge" data-ref="2" data-title="Neural Machine Translation by Jointly Learning to Align and Translate">2</sup><sup class="ref-badge" data-ref="9" data-title="Convolutional Sequence to Sequence Learning">9</sup>.</li>
   <li>The encoder contains <strong>self-attention layers</strong>. In a self-attention layer all of the keys, values and queries come from the same place — in this case, the output of the previous layer in the encoder. Each position in the encoder can attend to all positions in the previous layer of the encoder.</li>
   <li>Similarly, <strong>self-attention layers in the decoder</strong> allow each position in the decoder to attend to all positions in the decoder up to and including that position. We need to prevent leftward information flow in the decoder to preserve the auto-regressive property. We implement this inside of scaled dot-product attention by masking out (setting to −∞) all values in the input of the softmax which correspond to illegal connections.</li>
 </ul>
@@ -407,7 +407,7 @@
 </table>
 
 <p>
-  As noted in <a href="#tab-op-complexities" class="cross-ref">Table 1</a>, a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>) sequential operations. In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence length <span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span> is smaller than the representation dimensionality <span class="var" data-var="d" data-desc="Representation dimension" style="--var-color:#ffd700">d</span>, which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as word-piece <sup class="ref-badge" data-ref="41" data-title="Google's NMT System">42</sup> and byte-pair <sup class="ref-badge" data-ref="32" data-title="Neural Machine Translation of Rare Words with Subword Units">32</sup> representations.
+  As noted in <a href="#tab-op-complexities" class="cross-ref">Table 1</a>, a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O(<span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span>) sequential operations. In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence length <span class="var" data-var="n" data-desc="Sequence length" style="--var-color:#f0a050">n</span> is smaller than the representation dimensionality <span class="var" data-var="d" data-desc="Representation dimension" style="--var-color:#ffd700">d</span>, which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as word-piece <sup class="ref-badge" data-ref="40" data-title="Google's NMT System">42</sup> and byte-pair <sup class="ref-badge" data-ref="32" data-title="Neural Machine Translation of Rare Words with Subword Units">32</sup> representations.
 </p>
 
 <p>
@@ -430,7 +430,7 @@
 <h3>5.1 Training Data and Batching</h3>
 
 <p>
-  We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Sentences were encoded using byte-pair encoding <sup class="ref-badge" data-ref="3" data-title="Massive Exploration of NMT Architectures">3</sup>, which has a shared source-target vocabulary of about 37,000 tokens. For English-French, we used the significantly larger WMT 2014 English-French dataset consisting of 36M sentences and split tokens into a 32,000 word-piece vocabulary <sup class="ref-badge" data-ref="41" data-title="Google's NMT System">42</sup>. Sentence pairs were batched together by approximate sequence length. Each training batch contained a set of sentence pairs containing approximately 25,000 source tokens and 25,000 target tokens.
+  We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Sentences were encoded using byte-pair encoding <sup class="ref-badge" data-ref="3" data-title="Massive Exploration of NMT Architectures">3</sup>, which has a shared source-target vocabulary of about 37,000 tokens. For English-French, we used the significantly larger WMT 2014 English-French dataset consisting of 36M sentences and split tokens into a 32,000 word-piece vocabulary <sup class="ref-badge" data-ref="40" data-title="Google's NMT System">42</sup>. Sentence pairs were batched together by approximate sequence length. Each training batch contained a set of sentence pairs containing approximately 25,000 source tokens and 25,000 target tokens.
 </p>
 
 <h3>5.2 Hardware and Schedule</h3>
@@ -500,11 +500,11 @@
       <td>23.75</td><td>—</td><td></td><td>—</td><td>—</td>
     </tr>
     <tr>
-      <td>Deep-Att + PosUnk <sup class="ref-badge" data-ref="43">43</sup></td>
+      <td>Deep-Att + PosUnk <sup class="ref-badge" data-ref="40">43</sup></td>
       <td>—</td><td>39.2</td><td></td><td>—</td><td>1.0·10²⁰</td>
     </tr>
     <tr>
-      <td>GNMT + RL <sup class="ref-badge" data-ref="41">42</sup></td>
+      <td>GNMT + RL <sup class="ref-badge" data-ref="40">42</sup></td>
       <td>24.6</td><td>39.92</td><td></td><td>2.3·10¹⁹</td><td>1.4·10²⁰</td>
     </tr>
     <tr>
@@ -516,11 +516,11 @@
       <td>26.03</td><td>40.56</td><td></td><td>2.0·10¹⁹</td><td>1.2·10²⁰</td>
     </tr>
     <tr style="border-top: 2px solid var(--border)">
-      <td>Deep-Att + PosUnk Ensemble <sup class="ref-badge" data-ref="43">43</sup></td>
+      <td>Deep-Att + PosUnk Ensemble <sup class="ref-badge" data-ref="40">43</sup></td>
       <td>—</td><td>40.4</td><td></td><td>—</td><td>8.0·10²⁰</td>
     </tr>
     <tr>
-      <td>GNMT + RL Ensemble <sup class="ref-badge" data-ref="41">42</sup></td>
+      <td>GNMT + RL Ensemble <sup class="ref-badge" data-ref="40">42</sup></td>
       <td>26.30</td><td>41.16</td><td></td><td>1.8·10²⁰</td><td>1.1·10²¹</td>
     </tr>
     <tr>
@@ -547,7 +547,7 @@
 </p>
 
 <p>
-  For the base models, we used a single model obtained by averaging the last 5 checkpoints, which were written at 10-minute intervals. For the big models, we averaged the last 20 checkpoints. We used beam search with a beam size of 4 and length penalty <span class="var" data-var="α" data-desc="Length penalty exponent for beam search (default: 0.6)" style="--var-color:#ff7b72">α</span>=0.6 <sup class="ref-badge" data-ref="41" data-title="Google's NMT System">42</sup>. These hyperparameters were chosen after experimentation on the development set. We set the maximum output length during inference to input length + 50, but terminate early when possible <sup class="ref-badge" data-ref="41">42</sup>.
+  For the base models, we used a single model obtained by averaging the last 5 checkpoints, which were written at 10-minute intervals. For the big models, we averaged the last 20 checkpoints. We used beam search with a beam size of 4 and length penalty <span class="var" data-var="α" data-desc="Length penalty exponent for beam search (default: 0.6)" style="--var-color:#ff7b72">α</span>=0.6 <sup class="ref-badge" data-ref="40" data-title="Google's NMT System">42</sup>. These hyperparameters were chosen after experimentation on the development set. We set the maximum output length during inference to input length + 50, but terminate early when possible <sup class="ref-badge" data-ref="40">42</sup>.
 </p>
 
 <h3>6.2 Model Variations</h3>
@@ -709,7 +709,7 @@
       <td>WSJ only, discriminative</td><td>90.4</td>
     </tr>
     <tr>
-      <td>Zhu et al. (2013) <sup class="ref-badge" data-ref="44">44</sup></td>
+      <td>Zhu et al. (2013) <sup class="ref-badge" data-ref="42">44</sup></td>
       <td>WSJ only, discriminative</td><td>90.4</td>
     </tr>
     <tr>
@@ -721,7 +721,7 @@
       <td>WSJ only, discriminative</td><td><strong>91.3</strong></td>
     </tr>
     <tr style="border-top:2px solid var(--border)">
-      <td>Zhu et al. (2013) <sup class="ref-badge" data-ref="44">44</sup></td>
+      <td>Zhu et al. (2013) <sup class="ref-badge" data-ref="42">44</sup></td>
       <td>semi-supervised</td><td>91.3</td>
     </tr>
     <tr>
@@ -823,9 +823,9 @@
   <li id="ref-37"><strong>Sutskever, Vinyals, Le (2014).</strong> Sequence to sequence learning with neural networks. In <em>NIPS</em>, pp. 3104–3112.</li>
   <li id="ref-38"><strong>Szegedy, Vanhoucke, Ioffe, Shlens, Wojna (2015).</strong> Rethinking the inception architecture for computer vision. <em>CoRR abs/1512.00567</em>.</li>
   <li id="ref-39"><strong>Vinyals &amp; Kaiser, Koo, Petrov, Sutskever, Hinton (2015).</strong> Grammar as a foreign language. In <em>NIPS</em>.</li>
-  <li id="ref-41"><strong>Wu, Schuster, Chen, Le, Norouzi, Macherey, et al. (2016).</strong> Google's neural machine translation system: Bridging the gap between human and machine translation. <em>arXiv:1609.08144</em>.</li>
-  <li id="ref-43"><strong>Zhou, Cao, Wang, Li, Xu (2016).</strong> Deep recurrent models with fast-forward connections for neural machine translation. <em>CoRR abs/1606.04199</em>.</li>
-  <li id="ref-44"><strong>Zhu, Zhang, Chen, Zhang, Zhu (2013).</strong> Fast and accurate shift-reduce constituent parsing. In <em>ACL</em>, pp. 434–443.</li>
+  <li id="ref-40"><strong>Wu, Schuster, Chen, Le, Norouzi, Macherey, et al. (2016).</strong> Google's neural machine translation system: Bridging the gap between human and machine translation. <em>arXiv:1609.08144</em>.</li>
+  <li id="ref-41"><strong>Zhou, Cao, Wang, Li, Xu (2016).</strong> Deep recurrent models with fast-forward connections for neural machine translation. <em>CoRR abs/1606.04199</em>.</li>
+  <li id="ref-42"><strong>Zhu, Zhang, Chen, Zhang, Zhu (2013).</strong> Fast and accurate shift-reduce constituent parsing. In <em>ACL</em>, pp. 434–443.</li>
 </ol>
 
 <!-- ═══════════════════════════════════════════════════ -->

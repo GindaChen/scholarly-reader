@@ -46,7 +46,7 @@ Google's phrase-based production system.</p>
 
 <span id="intro" class="label-anchor"></span>
 Neural Machine Translation
-(NMT)~<sup class="ref-badge" data-ref="41" data-title="Sequence to sequence learning with neural networks.">41</sup><sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup> has recently been
+(NMT)~<sup class="ref-badge" data-ref="9" data-title="Sequence to sequence learning with neural networks.">41</sup><sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup> has recently been
 introduced as a promising approach with the potential of addressing
 many shortcomings of traditional machine translation systems.
 
@@ -59,7 +59,7 @@ which helps it cope effectively with long input sequences.</p>
 
 <p>An advantage of Neural Machine Translation is that it sidesteps many
 brittle design choices in traditional phrase-based machine
-translation~<sup class="ref-badge" data-ref="26" data-title="Statistical phrase-based translation.">26</sup>. In practice, however, NMT systems 
+translation~<sup class="ref-badge" data-ref="9" data-title="Statistical phrase-based translation.">26</sup>. In practice, however, NMT systems 
 used to be worse in accuracy than phrase-based translation systems,
 especially when training on very large-scale datasets as used for the very 
 best publicly available translation systems.</p>
@@ -76,8 +76,8 @@ used.</p>
 
 <p>Secondly, NMT lacks robustness in translating rare words. Though this
 can be addressed in principle by training a ``copy model'' to mimic a
-traditional alignment model~<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup>, or by using the
-attention mechanism to copy rare words~<sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup>, these approaches are
+traditional alignment model~<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup>, or by using the
+attention mechanism to copy rare words~<sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup>, these approaches are
 both unreliable at scale, since the quality of the alignments varies across
 languages, and the latent alignments produced by the attention
 mechanism are unstable when the network is deep. Also, simple copying
@@ -92,15 +92,15 @@ surprising translations.</p>
 system at Google, that aims to
 provide solutions to the above problems. In our implementation, the
 recurrent networks are Long Short-Term Memory (LSTM)
-RNNs~<sup class="ref-badge" data-ref="23" data-title="Long short-term memory.">23</sup><sup class="ref-badge" data-ref="17" data-title="Learning to forget: Continual prediction with LSTM.">17</sup>. Our LSTM RNNs have 8
+RNNs~<sup class="ref-badge" data-ref="9" data-title="Long short-term memory.">23</sup><sup class="ref-badge" data-ref="9" data-title="Learning to forget: Continual prediction with LSTM.">17</sup>. Our LSTM RNNs have 8
 layers, with residual connections between layers to encourage gradient
-flow~<sup class="ref-badge" data-ref="21" data-title="Deep residual learning for image recognition.">21</sup>. For parallelism, we connect the attention from
+flow~<sup class="ref-badge" data-ref="9" data-title="Deep residual learning for image recognition.">21</sup>. For parallelism, we connect the attention from
 the bottom layer of the decoder network to the top layer of the
 encoder network. To improve inference time, we employ low-precision
 arithmetic for inference, which is further accelerated by special
 hardware (Google's Tensor Processing Unit, or TPU).  To effectively
 deal with rare words, we use sub-word units (also known as
-``wordpieces'') <sup class="ref-badge" data-ref="35" data-title="Japanese and Korean voice search.">35</sup> for inputs and outputs in
+``wordpieces'') <sup class="ref-badge" data-ref="9" data-title="Japanese and Korean voice search.">35</sup> for inputs and outputs in
 our system. Using wordpieces gives a good balance between the
 flexibility of single characters and the efficiency of full words for
 decoding, and also sidesteps the need for special treatment of unknown
@@ -117,7 +117,7 @@ systems on standard benchmarks, while delivering great improvements over
 Google's phrase-based production translation system.
 Specifically, on WMT'14 English-to-French, our single model
 scores 38.95 BLEU, an improvement of 7.5 BLEU from a single model
-without an external alignment model reported in~<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup> and an improvement of 1.2 BLEU from a single model
+without an external alignment model reported in~<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup> and an improvement of 1.2 BLEU from a single model
 without an external alignment model reported in~[DBLP:journals/corr/ZhouCWLX16]. 
 Our single model is also comparable to a single model in~[DBLP:journals/corr/ZhouCWLX16], 
 while not making use of any alignment model as being used in~[DBLP:journals/corr/ZhouCWLX16].</p>
@@ -142,42 +142,42 @@ paradigm for
 decades~<sup class="ref-badge" data-ref="3" data-title="R., and Roossin, P.">3</sup><sup class="ref-badge" data-ref="4" data-title="Lafferty, J. D., Mercer, R. L., and Roossin, P. S.">4</sup><sup class="ref-badge" data-ref="5" data-title="The mathematics of statistical machine translation: Parameter">5</sup>.
 Practical implementations of SMT are generally phrase-based systems (PBMT)
 which translate sequences of words or phrases where the lengths may
-differ~<sup class="ref-badge" data-ref="26" data-title="Statistical phrase-based translation.">26</sup>.
+differ~<sup class="ref-badge" data-ref="9" data-title="Statistical phrase-based translation.">26</sup>.
 
 <p>Even prior to the advent of direct Neural Machine Translation,
 neural networks have been used as a component within SMT systems with some success.
 Perhaps one of the most notable attempts involved the use of a joint language
-model to learn phrase representations~<sup class="ref-badge" data-ref="13" data-title="J.">13</sup> which yielded an
+model to learn phrase representations~<sup class="ref-badge" data-ref="9" data-title="J.">13</sup> which yielded an
 impressive improvement when combined with phrase-based translation.
 This approach, however, still makes use of phrase-based translation systems
 at its core, and therefore inherits their shortcomings.
 Other proposed approaches for learning phrase representations~<sup class="ref-badge" data-ref="7" data-title="F., Schwenk, H., and Bengio, Y.">7</sup>
 or learning end-to-end translation with neural 
-networks~<sup class="ref-badge" data-ref="24" data-title="Recurrent continuous translation models.">24</sup> offered encouraging hints, but 
+networks~<sup class="ref-badge" data-ref="9" data-title="Recurrent continuous translation models.">24</sup> offered encouraging hints, but 
 ultimately delivered worse overall accuracy compared to standard 
 phrase-based systems.</p>
 
 <p>The concept of end-to-end learning for machine translation has been
 attempted in the past (e.g.,~<sup class="ref-badge" data-ref="8" data-title="Learning recursive distributed representations for holistic">8</sup>) with limited
 success. Following seminal papers in the
-area~<sup class="ref-badge" data-ref="41" data-title="Sequence to sequence learning with neural networks.">41</sup><sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup>, NMT translation quality has
+area~<sup class="ref-badge" data-ref="9" data-title="Sequence to sequence learning with neural networks.">41</sup><sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup>, NMT translation quality has
 crept closer to the level of phrase-based translation systems for
 common research benchmarks. Perhaps the first successful attempt at surpassing
-phrase-based translation was described in~<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup>.
+phrase-based translation was described in~<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup>.
 On WMT'14 English-to-French, this system achieved a 0.5 BLEU improvement
 compared to a state-of-the-art phrase-based system.</p>
 
 <p>Since then, many novel techniques have been proposed to further
 improve NMT: using an attention mechanism to deal with rare
-words~<sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup>, a mechanism to model translation
-coverage~<sup class="ref-badge" data-ref="42" data-title="Coverage-based neural machine translation.">42</sup>, multi-task and semi-supervised training to
-incorporate more data~<sup class="ref-badge" data-ref="14" data-title="Multi-task learning for multiple language translation.">14</sup><sup class="ref-badge" data-ref="29" data-title="Multi-task sequence to sequence learning.">29</sup>, a character
+words~<sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup>, a mechanism to model translation
+coverage~<sup class="ref-badge" data-ref="9" data-title="Coverage-based neural machine translation.">42</sup>, multi-task and semi-supervised training to
+incorporate more data~<sup class="ref-badge" data-ref="9" data-title="Multi-task learning for multiple language translation.">14</sup><sup class="ref-badge" data-ref="9" data-title="Multi-task sequence to sequence learning.">29</sup>, a character
 decoder~<sup class="ref-badge" data-ref="9" data-title="A character-level decoder without explicit segmentation for neural" data-arxiv-id="1603.06147">9</sup>, a character
 encoder~[DBLP:journals/corr/Costa-JussaF16], subword
-units~<sup class="ref-badge" data-ref="38" data-title="Neural machine translation of rare words with subword units.">38</sup> also to deal with rare word outputs,
+units~<sup class="ref-badge" data-ref="9" data-title="Neural machine translation of rare words with subword units.">38</sup> also to deal with rare word outputs,
 different kinds of attention
-mechanisms~<sup class="ref-badge" data-ref="30" data-title="Effective approaches to attention-based neural machine translation.">30</sup>, and sentence-level
-loss minimization~<sup class="ref-badge" data-ref="39" data-title="Minimum risk training for neural machine translation.">39</sup><sup class="ref-badge" data-ref="34" data-title="Sequence level training with recurrent neural networks.">34</sup>.</p>
+mechanisms~<sup class="ref-badge" data-ref="9" data-title="Effective approaches to attention-based neural machine translation.">30</sup>, and sentence-level
+loss minimization~<sup class="ref-badge" data-ref="9" data-title="Minimum risk training for neural machine translation.">39</sup><sup class="ref-badge" data-ref="9" data-title="Sequence level training with recurrent neural networks.">34</sup>.</p>
 
 <p>While the translation accuracy of these systems has been encouraging, systematic
 comparison with large scale, production quality phrase-based translation systems
@@ -189,7 +189,7 @@ has been lacking.</p>
 
 <span id="model architecture" class="label-anchor"></span>
 Our model (see Figure~<a href="#main_figure" class="cross-ref">Fig. 1</a>) follows the common
-sequence-to-sequence learning framework~<sup class="ref-badge" data-ref="41" data-title="Sequence to sequence learning with neural networks.">41</sup> with
+sequence-to-sequence learning framework~<sup class="ref-badge" data-ref="9" data-title="Sequence to sequence learning with neural networks.">41</sup> with
 attention~<sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup>. It has three components:
 an encoder network, a decoder network, and an attention network. The
 encoder transforms a source sentence into a list of vectors, one vector per input symbol.  Given
@@ -251,10 +251,10 @@ through the softmax layer to generate a probability distribution over candidate 
 both the encoder and decoder RNNs have to be deep enough to capture subtle
 irregularities in the source and target languages. This observation is
 similar to previous observations that deep LSTMs significantly outperform 
-shallow LSTMs~<sup class="ref-badge" data-ref="41" data-title="Sequence to sequence learning with neural networks.">41</sup>. In that work, each
+shallow LSTMs~<sup class="ref-badge" data-ref="9" data-title="Sequence to sequence learning with neural networks.">41</sup>. In that work, each
 additional layer reduced perplexity by nearly 10\%. Similar to
-<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup>, we use a deep stacked Long Short Term
-Memory (LSTM)~<sup class="ref-badge" data-ref="23" data-title="Long short-term memory.">23</sup> network for both the encoder
+<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup>, we use a deep stacked Long Short Term
+Memory (LSTM)~<sup class="ref-badge" data-ref="9" data-title="Long short-term memory.">23</sup> network for both the encoder
 RNN and the decoder RNN.</p>
 
 <p>Our attention module is similar to~<sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup>. More
@@ -280,14 +280,14 @@ shallower models.
 However, simply stacking more layers of LSTM works only to a certain number of
 layers, beyond which the network becomes too slow and difficult to
 train, likely due to exploding and vanishing gradient problems
-[DBLP:journals/corr/abs-1211-5063]<sup class="ref-badge" data-ref="22" data-title="Gradient flow in recurrent nets: the difficulty of learning long-term">22</sup>. In
+[DBLP:journals/corr/abs-1211-5063]<sup class="ref-badge" data-ref="9" data-title="Gradient flow in recurrent nets: the difficulty of learning long-term">22</sup>. In
 our experience with large-scale translation tasks, simple stacked LSTM layers
 work well up to 4
 layers, barely with 6 layers, and very poorly beyond 8 layers.
 
 <p>Motivated by the idea of modeling differences between an intermediate layer's
 output and the targets, which has shown to work well for many projects in the
-past <sup class="ref-badge" data-ref="16" data-title="The cascade-correlation learning architecture.">16</sup><sup class="ref-badge" data-ref="21" data-title="Deep residual learning for image recognition.">21</sup>[DBLP:journals/corr/SrivastavaGS15],
+past <sup class="ref-badge" data-ref="9" data-title="The cascade-correlation learning architecture.">16</sup><sup class="ref-badge" data-ref="9" data-title="Deep residual learning for image recognition.">21</sup>[DBLP:journals/corr/SrivastavaGS15],
 we introduce residual connections
 among the LSTM layers in a stack (see Figure~<a href="#residual_connection" class="cross-ref">Fig. 3</a>). 
 More concretely, let <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mrow><mi mathvariant="normal">L</mi><mi mathvariant="normal">S</mi><mi mathvariant="normal">T</mi><mi mathvariant="normal">M</mi></mrow><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\LSTM_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathrm">LSTM</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mrow><mi mathvariant="normal">L</mi><mi mathvariant="normal">S</mi><mi mathvariant="normal">T</mi><mi mathvariant="normal">M</mi></mrow><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">\LSTM_{i+1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8917em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord"><span class="mord mathrm">LSTM</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span></span> be the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6595em;"></span><span class="mord mathnormal">i</span></span></span></span></span>-th and
@@ -335,7 +335,7 @@ regions of the input side.</p>
 
 <p>To have the best possible context at each point in the encoder network
 it makes sense to use a bi-directional
-RNN~<sup class="ref-badge" data-ref="36" data-title="Bidirectional recurrent neural networks.">36</sup> for the encoder, which
+RNN~<sup class="ref-badge" data-ref="9" data-title="Bidirectional recurrent neural networks.">36</sup> for the encoder, which
 was also used in~<sup class="ref-badge" data-ref="2" data-title="Neural machine translation by jointly learning to align and">2</sup>.  To allow for maximum possible 
 parallelization during computation (to be
 discussed in more detail in section <a href="#Model Parallelism" class="cross-ref">Section 5</a>),
@@ -367,7 +367,7 @@ to the next layer <span class="math-inline"><span class="katex"><span class="kat
 <p>Due to the complexity of our model, we make use of both model
 parallelism and data parallelism to speed up training. Data
 parallelism is straightforward: we train <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> model replicas
-concurrently using a Downpour SGD algorithm <sup class="ref-badge" data-ref="12" data-title="M. Z., Ranzato, M., Senior, A., Tucker, P., Yang, K., and Ng, A. Y.">12</sup>. The
+concurrently using a Downpour SGD algorithm <sup class="ref-badge" data-ref="9" data-title="M. Z., Ranzato, M., Senior, A., Tucker, P., Yang, K., and Ng, A. Y.">12</sup>. The
 <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> replicas all share one copy of model parameters, with each replica
 asynchronously updating the parameters using a combination of Adam
 [DBLP:journals/corr/KingmaB14] and SGD algorithms.  In our experiments, 
@@ -411,24 +411,24 @@ approaches to address the translation of out-of-vocabulary (OOV)
 words. One approach is to simply **copy** rare words from source to target
 (as most rare words are names or numbers where the correct translation
 is just a copy), either based on the attention
-model~<sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup>, using an external alignment
-model~<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup>, or even using a more complicated
+model~<sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup>, using an external alignment
+model~<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup>, or even using a more complicated
 special purpose pointing
 network~[DBLP:journals/corr/GulcehreANZB16]. Another broad
 category of approaches is to use **sub-word units**, e.g.,
 chararacters~[DBLP:journals/corr/ChungCB16], mixed
 word/characters~[DBLP:journals/corr/LuongM16], or more intelligent
-sub-words~<sup class="ref-badge" data-ref="38" data-title="Neural machine translation of rare words with subword units.">38</sup>.</p>
+sub-words~<sup class="ref-badge" data-ref="9" data-title="Neural machine translation of rare words with subword units.">38</sup>.</p>
 
 ### Wordpiece Model
 <span id="wordpiece Model" class="label-anchor"></span>
 Our most successful approach falls into the second category (sub-word units), and we
 adopt the wordpiece model (WPM) implementation initially developed to
 solve a Japanese/Korean segmentation problem for the Google speech
-recognition system~<sup class="ref-badge" data-ref="35" data-title="Japanese and Korean voice search.">35</sup>. This approach is completely
+recognition system~<sup class="ref-badge" data-ref="9" data-title="Japanese and Korean voice search.">35</sup>. This approach is completely
 data-driven and guaranteed to generate a deterministic segmentation
 for any possible sequence of characters.  It is similar to
-the method used in <sup class="ref-badge" data-ref="38" data-title="Neural machine translation of rare words with subword units.">38</sup> to deal with rare words in
+the method used in <sup class="ref-badge" data-ref="9" data-title="Neural machine translation of rare words with subword units.">38</sup> to deal with rare words in
 Neural Machine Translation.
 
 <p>For processing arbitrary words, we first break words into wordpieces
@@ -456,9 +456,9 @@ desired tokens <span class="math-inline"><span class="katex"><span class="katex-
 wordpieces such that the resulting corpus is minimal in the number of
 wordpieces when segmented according to the chosen wordpiece model. Our
 greedy algorithm to this optimization problem is similar
-to~<sup class="ref-badge" data-ref="38" data-title="Neural machine translation of rare words with subword units.">38</sup> and is described in more detail in
-<sup class="ref-badge" data-ref="35" data-title="Japanese and Korean voice search.">35</sup>. Compared to the original implementation used in
-<sup class="ref-badge" data-ref="35" data-title="Japanese and Korean voice search.">35</sup>, we use a special symbol only at the
+to~<sup class="ref-badge" data-ref="9" data-title="Neural machine translation of rare words with subword units.">38</sup> and is described in more detail in
+<sup class="ref-badge" data-ref="9" data-title="Japanese and Korean voice search.">35</sup>. Compared to the original implementation used in
+<sup class="ref-badge" data-ref="9" data-title="Japanese and Korean voice search.">35</sup>, we use a special symbol only at the
 beginning of the words and not at both ends.  We also cut the number
 of basic characters to a manageable number depending on the data
 (roughly 500 for Western languages, more for Asian languages) and map
@@ -541,7 +541,7 @@ training only, the model will not learn to be robust to errors made during
 decoding since they are never observed, which is quite a mismatch between 
 the training and testing procedure.</p>
 
-<p>Several recent papers~<sup class="ref-badge" data-ref="34" data-title="Sequence level training with recurrent neural networks.">34</sup><sup class="ref-badge" data-ref="39" data-title="Minimum risk training for neural machine translation.">39</sup><sup class="ref-badge" data-ref="32" data-title="Schuurmans, D.">32</sup>
+<p>Several recent papers~<sup class="ref-badge" data-ref="9" data-title="Sequence level training with recurrent neural networks.">34</sup><sup class="ref-badge" data-ref="9" data-title="Minimum risk training for neural machine translation.">39</sup><sup class="ref-badge" data-ref="9" data-title="Schuurmans, D.">32</sup>
 have considered different ways of incorporating the task reward into
 optimization of neural sequence-to-sequence models.</p>
 
@@ -552,7 +552,7 @@ maximum-likelihood models using task reward improves the results
 considerably.</p>
 
 <p>We consider model refinement using the expected reward objective (also
-used in~<sup class="ref-badge" data-ref="34" data-title="Sequence level training with recurrent neural networks.">34</sup>), which can be expressed as</p>
+used in~<sup class="ref-badge" data-ref="9" data-title="Sequence level training with recurrent neural networks.">34</sup>), which can be expressed as</p>
 
 <div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="script">O</mi><mrow><mi mathvariant="normal">R</mi><mi mathvariant="normal">L</mi></mrow></msub><mo stretchy="false">(</mo><mover accent="true"><mi>θ</mi><mo>⃗</mo></mover><mo stretchy="false">)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover><munder><mo>∑</mo><mrow><mi>Y</mi><mo>∈</mo><mi mathvariant="script">Y</mi></mrow></munder><msub><mi>P</mi><mi>θ</mi></msub><mo stretchy="false">(</mo><mi>Y</mi><mo>∣</mo><msup><mi>X</mi><mrow><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msup><mo stretchy="false">)</mo><mtext> </mtext><mi>r</mi><mo stretchy="false">(</mo><mi>Y</mi><mo separator="true">,</mo><msup><mi>Y</mi><mrow><mo>∗</mo><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></msup><mo stretchy="false">)</mo><mi mathvariant="normal">.</mi></mrow><annotation encoding="application/x-tex">\objrl(\btheta) = \sum_{i=1}^N \sum_{Y \in \calY}
 	\modelp(Y \mid
@@ -853,7 +853,7 @@ experimentation and use TPUs to serve production traffic.</p>
 We use beam search during decoding to find the sequence <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Y</mi></mrow><annotation encoding="application/x-tex">Y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">Y</span></span></span></span></span>
 that maximizes a score function <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi><mo stretchy="false">(</mo><mi>Y</mi><mo separator="true">,</mo><mi>X</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">s(Y, X)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">s</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.22222em;">Y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mclose">)</span></span></span></span></span> given a trained model. We
 introduce two important refinements to the pure max-probability based beam
-search algorithm: a coverage penalty~<sup class="ref-badge" data-ref="42" data-title="Coverage-based neural machine translation.">42</sup> and length
+search algorithm: a coverage penalty~<sup class="ref-badge" data-ref="9" data-title="Coverage-based neural machine translation.">42</sup> and length
 normalization. With length normalization, we aim to account for the
 fact that we have to compare hypotheses of different length. Without
 some form of length-normalization regular beam search will favor
@@ -1135,7 +1135,7 @@ production datasets. On WMT En<span class="math-inline"><span class="katex"><spa
 contains 36M sentence pairs.  On WMT En<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></span>De, the training
 set contains 5M sentence pairs. In both cases, we use newstest2014 as the test
 sets to compare against previous
-work~<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup><sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup>[DBLP:journals/corr/ZhouCWLX16].
+work~<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup><sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup>[DBLP:journals/corr/ZhouCWLX16].
 The combination of newstest2012 and newstest2013 is used as the development set.
 
 <p>In addition to WMT, we also evaluate
@@ -1146,10 +1146,10 @@ English <span class="math-inline"><span class="katex"><span class="katex-mathml"
 
 ### Evaluation Metrics
 We evaluate our models using the standard BLEU score metric. To be
-comparable to previous work~<sup class="ref-badge" data-ref="41" data-title="Sequence to sequence learning with neural networks.">41</sup><sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup>[DBLP:journals/corr/ZhouCWLX16], we report
+comparable to previous work~<sup class="ref-badge" data-ref="9" data-title="Sequence to sequence learning with neural networks.">41</sup><sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup>[DBLP:journals/corr/ZhouCWLX16], we report
 tokenized BLEU score as computed by the \texttt{multi-bleu.pl} script,
 downloaded from the public implementation of Moses (on Github), which is
-also used in~<sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup>.
+also used in~<sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup>.
 
 <p>As is well-known, BLEU score does not fully capture the quality of a
 translation. For that reason we also carry out side-by-side (SxS)
@@ -1178,7 +1178,7 @@ parameters asynchronously.</p>
 
 <p>We initialize all trainable parameters uniformly between [-0.04, 0.04]. As
 is common wisdom in training RNN models, we apply gradient clipping
-(similar to <sup class="ref-badge" data-ref="41" data-title="Sequence to sequence learning with neural networks.">41</sup>): all gradients are uniformly
+(similar to <sup class="ref-badge" data-ref="9" data-title="Sequence to sequence learning with neural networks.">41</sup>): all gradients are uniformly
 scaled down such that the norm of the modified gradients is no larger
 than a fixed constant, which is <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>5.0</mn></mrow><annotation encoding="application/x-tex">5.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5.0</span></span></span></span></span> in our case. If the norm of the
 original gradients is already smaller than or equal to the given
@@ -1216,7 +1216,7 @@ of steps needed to refine a model varies from dataset to dataset. For
 WMT En<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></span>Fr, it takes around 3 days to complete 400k steps.</p>
 
 <p>To prevent overfitting, we apply dropout during training with a scheme similar
-to <sup class="ref-badge" data-ref="44" data-title="Recurrent neural network regularization, 2014.">44</sup>. For the WMT En<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></span>Fr and En<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></span>De datasets, we set the
+to <sup class="ref-badge" data-ref="9" data-title="Recurrent neural network regularization, 2014.">44</sup>. For the WMT En<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></span>Fr and En<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>→</mo></mrow><annotation encoding="application/x-tex">\rightarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">→</span></span></span></span></span>De datasets, we set the
 dropout probability to be <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.2</mn></mrow><annotation encoding="application/x-tex">0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.3</mn></mrow><annotation encoding="application/x-tex">0.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.3</span></span></span></span></span> respectively. Due to various technical reasons, dropout is
 only applied during the ML training phase, not during the RL refinement phase.</p>
 
@@ -1241,7 +1241,7 @@ vocabulary (unknown words) are converted into special
 symbols. Note, in this case, there is more than one UNK (e.g., our
 production word models have roughly 5000 different UNKs in this case). We then
 use the attention mechanism to copy a corresponding word from the
-source to replace these unknown words during decoding~<sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup>.</p>
+source to replace these unknown words during decoding~<sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup>.</p>
 
 <p>The mixed word-character model is similar to the word model, except the
 out-of-vocabulary (OOV) words are converted into sequences of
@@ -1325,17 +1325,17 @@ decoding time divided by the number of respective sentences in the test set.</p>
     <td>0.2774</td>
   </tr>
   <tr>
-    <td>PBMT <sup class="ref-badge" data-ref="15" data-title="Edinburgh's phrase-based machine translation systems for WMT-14.">15</sup></td>
+    <td>PBMT <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for WMT-14.">15</sup></td>
     <td>37.0</td>
     <td></td>
   </tr>
   <tr>
-    <td>LSTM (6 layers) <sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
+    <td>LSTM (6 layers) <sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
     <td>31.5</td>
     <td></td>
   </tr>
   <tr>
-    <td>LSTM (6 layers + PosUnk) <sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
+    <td>LSTM (6 layers + PosUnk) <sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
     <td>33.1</td>
     <td></td>
   </tr>
@@ -1405,15 +1405,15 @@ achieves the best BLEU scores.</p>
     <td></td>
   </tr>
   <tr>
-    <td>RNNSearch <sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup></td>
+    <td>RNNSearch <sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup></td>
     <td>16.5</td>
   </tr>
   <tr>
-    <td>RNNSearch-LV <sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup></td>
+    <td>RNNSearch-LV <sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup></td>
     <td>16.9</td>
   </tr>
   <tr>
-    <td>RNNSearch-LV <sup class="ref-badge" data-ref="37" data-title="On using very large target vocabulary for neural machine translation.">37</sup></td>
+    <td>RNNSearch-LV <sup class="ref-badge" data-ref="9" data-title="On using very large target vocabulary for neural machine translation.">37</sup></td>
     <td>16.9</td>
   </tr>
   <tr>
@@ -1501,11 +1501,11 @@ reported in Table~<a href="#table:ensemble-wmt_en_fr" class="cross-ref">Table 7<
     <td>41.16</td>
   </tr>
   <tr>
-    <td>LSTM (6 layers) <sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
+    <td>LSTM (6 layers) <sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
     <td>35.6</td>
   </tr>
   <tr>
-    <td>LSTM (6 layers + PosUnk) <sup class="ref-badge" data-ref="31" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
+    <td>LSTM (6 layers + PosUnk) <sup class="ref-badge" data-ref="9" data-title="Addressing the rare word problem in neural machine translation.">31</sup></td>
     <td>37.5</td>
   </tr>
   <tr>
@@ -1539,7 +1539,7 @@ Our results are presented in Table~<a href="#table:wmt_en_fr_sxs" class="cross-r
     <td>averaged score</td>
   </tr>
   <tr>
-    <td>PBMT <sup class="ref-badge" data-ref="15" data-title="Edinburgh's phrase-based machine translation systems for WMT-14.">15</sup></td>
+    <td>PBMT <sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for WMT-14.">15</sup></td>
     <td>37.0</td>
     <td>3.87</td>
   </tr>
@@ -1732,7 +1732,7 @@ for their foundational contributions to this project.</p>
 <p>\newcolumntype{L}[1]{>{\raggedright\let\newline\\\arraybackslash\hspace{0pt}}m{#1}}</p>
 
 <table class="article-table">
-  <caption>Some example translations from PBMT~<sup class="ref-badge" data-ref="15" data-title="Edinburgh's phrase-based machine translation systems for WMT-14.">15</sup>, our GNMT system (the "NMT before RL", Table~?
+  <caption>Some example translations from PBMT~<sup class="ref-badge" data-ref="9" data-title="Edinburgh's phrase-based machine translation systems for WMT-14.">15</sup>, our GNMT system (the "NMT before RL", Table~?
 \noalign{\vskip 2mm}
  
 		Source</th>
@@ -1851,40 +1851,39 @@ for their foundational contributions to this project.</p>
   <li id="ref-7"><strong>\sc Cho, K., van Merrienboer, B., G\"ul\ccehre, \cC., Bougares,</strong> F., Schwenk, H., and Bengio, Y.. <em>Learning phrase representations using RNN encoder-decoder for statistical machine translation. In Conference on Empirical Methods in Natural Language Processing\/ (2014).</em></li>
   <li id="ref-8"><strong>\sc Chrisman, L.</strong> Learning recursive distributed representations for holistic. <em>computation. Connection Science 3, 4 (1991), 345--366.</em></li>
   <li id="ref-9"><strong>\sc Chung, J., Cho, K., and Bengio, Y.</strong> A character-level decoder without explicit segmentation for neural. <em>machine translation. arXiv preprint arXiv:1603.06147\/ (2016).</em></li>
-  <li id="ref-10"><strong>\sc Chung, J., Cho, K., and Bengio, Y.</strong> A character-level decoder without explicit segmentation for neural. <em>machine translation. CoRR abs/1603.06147\/ (2016).</em></li>
-  <li id="ref-11"><strong>\sc Costa-Juss\`a, M. R., and Fonollosa, J. A. R.</strong> Character-based neural machine translation.. <em>CoRR abs/1603.00810\/ (2016).</em></li>
-  <li id="ref-12"><strong>\sc Dean, J., Corrado, G. S., Monga, R., Chen, K., Devin, M., Le, Q. V., Mao,</strong> M. Z., Ranzato, M., Senior, A., Tucker, P., Yang, K., and Ng, A. Y.. <em>Large scale distributed deep networks. In NIPS\/ (2012).</em></li>
-  <li id="ref-13"><strong>\sc Devlin, J., Zbib, R., Huang, Z., Lamar, T., Schwartz, R. M., and Makhoul,</strong> J.. <em>Fast and robust neural network joint models for statistical machine translation. In ACL (1)\/ (2014), Citeseer, pp. 1370--1380.</em></li>
-  <li id="ref-14"><strong>\sc Dong, D., Wu, H., He, W., Yu, D., and Wang, H.</strong> Multi-task learning for multiple language translation.. <em>In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics\/ (2015), pp. 1723--1732.</em></li>
-  <li id="ref-15"><strong>\sc Durrani, N., Haddow, B., Koehn, P., and Heafield, K.</strong> Edinburgh's phrase-based machine translation systems for WMT-14.. <em>In Proceedings of the Ninth Workshop on Statistical Machine Translation\/ (2014), Association for Computational Linguistics Baltimore, MD, USA, pp. 97--104.</em></li>
-  <li id="ref-16"><strong>\sc Fahlman, S. E., and Lebiere, C.</strong> The cascade-correlation learning architecture.. <em>In Advances in Neural Information Processing Systems 2\/ (1990), Morgan Kaufmann, pp. 524--532.</em></li>
-  <li id="ref-17"><strong>\sc Gers, F. A., Schmidhuber, J., and Cummins, F.</strong> Learning to forget: Continual prediction with LSTM.. <em>Neural computation 12, 10 (2000), 2451--2471.</em></li>
-  <li id="ref-18"><strong>\sc G\"ul\ccehre, \cC., Ahn, S., Nallapati, R., Zhou, B., and</strong> Bengio, Y.. <em>Pointing the unknown words. CoRR abs/1603.08148\/ (2016).</em></li>
-  <li id="ref-19"><strong>\sc Gupta, S., Agrawal, A., Gopalakrishnan, K., and Narayanan, P.</strong> Deep learning with limited numerical precision.. <em>CoRR abs/1502.02551\/ (2015).</em></li>
-  <li id="ref-20"><strong>\sc Han, S., Mao, H., and Dally, W. J.</strong> Deep compression: Compressing deep neural network with pruning,. <em>trained quantization and huffman coding. CoRR abs/1510.00149\/ (2015).</em></li>
-  <li id="ref-21"><strong>\sc He, K., Zhang, X., Ren, S., and Sun, J.</strong> Deep residual learning for image recognition.. <em>In IEEE Conference on Computer Vision and Pattern Recognition\/ (2015).</em></li>
-  <li id="ref-22"><strong>\sc Hochreiter, S., Bengio, Y., Frasconi, P., and Schmidhuber, J.</strong> Gradient flow in recurrent nets: the difficulty of learning long-term. <em>dependencies, 2001.</em></li>
-  <li id="ref-23"><strong>\sc Hochreiter, S., and Schmidhuber, J.</strong> Long short-term memory.. <em>Neural computation 9, 8 (1997), 1735--1780.</em></li>
-  <li id="ref-24"><strong>\sc Kalchbrenner, N., and Blunsom, P.</strong> Recurrent continuous translation models.. <em>In Conference on Empirical Methods in Natural Language Processing\/ (2013).</em></li>
-  <li id="ref-25"><strong>\sc Kingma, D. P., and Ba, J.</strong> Adam: A method for stochastic optimization.. <em>CoRR abs/1412.6980\/ (2014).</em></li>
-  <li id="ref-26"><strong>\sc Koehn, P., Och, F. J., and Marcu, D.</strong> Statistical phrase-based translation.. <em>In Proceedings of the 2003 Conference of the North American Chapter of the Association for Computational Linguistics\/ (2003).</em></li>
-  <li id="ref-27"><strong>\sc Li, F., and Liu, B.</strong> Ternary weight networks.. <em>CoRR abs/1605.04711\/ (2016).</em></li>
-  <li id="ref-28"><strong>\sc Luong, M., and Manning, C. D.</strong> Achieving open vocabulary neural machine translation with hybrid. <em>word-character models. CoRR abs/1604.00788\/ (2016).</em></li>
-  <li id="ref-29"><strong>\sc Luong, M.-T., Le, Q. V., Sutskever, I., Vinyals, O., and Kaiser, L.</strong> Multi-task sequence to sequence learning.. <em>In International Conference on Learning Representations\/ (2015).</em></li>
-  <li id="ref-30"><strong>\sc Luong, M.-T., Pham, H., and Manning, C. D.</strong> Effective approaches to attention-based neural machine translation.. <em>In Conference on Empirical Methods in Natural Language Processing\/ (2015).</em></li>
-  <li id="ref-31"><strong>\sc Luong, M.-T., Sutskever, I., Le, Q. V., Vinyals, O., and Zaremba, W.</strong> Addressing the rare word problem in neural machine translation.. <em>In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing\/ (2015).</em></li>
-  <li id="ref-32"><strong>\sc Norouzi, M., Bengio, S., Chen, Z., Jaitly, N., Schuster, M., Wu, Y., and</strong> Schuurmans, D.. <em>Reward augmented maximum likelihood for neural structured prediction. In Neural Information Processing Systems\/ (2016).</em></li>
-  <li id="ref-33"><strong>\sc Pascanu, R., Mikolov, T., and Bengio, Y.</strong> Understanding the exploding gradient problem.. <em>CoRR abs/1211.5063\/ (2012).</em></li>
-  <li id="ref-34"><strong>\sc Ranzato, M., Chopra, S., Auli, M., and Zaremba, W.</strong> Sequence level training with recurrent neural networks.. <em>In International Conference on Learning Representations\/ (2015).</em></li>
-  <li id="ref-35"><strong>\sc Schuster, M., and Nakajima, K.</strong> Japanese and Korean voice search.. <em>2012 IEEE International Conference on Acoustics, Speech and Signal Processing\/ (2012).</em></li>
-  <li id="ref-36"><strong>\sc Schuster, M., and Paliwal, K.</strong> Bidirectional recurrent neural networks.. <em>IEEE Transactions on Signal Processing 45, 11 (Nov. 1997), 2673--2681.</em></li>
-  <li id="ref-37"><strong>\sc S\'ebastien, J., Kyunghyun, C., Memisevic, R., and Bengio, Y.</strong> On using very large target vocabulary for neural machine translation.. <em>In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing\/ (2015).</em></li>
-  <li id="ref-38"><strong>\sc Sennrich, R., Haddow, B., and Birch, A.</strong> Neural machine translation of rare words with subword units.. <em>In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics\/ (2016).</em></li>
-  <li id="ref-39"><strong>\sc Shen, S., Cheng, Y., He, Z., He, W., Wu, H., Sun, M., and Liu, Y.</strong> Minimum risk training for neural machine translation.. <em>In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics\/ (2016).</em></li>
-  <li id="ref-40"><strong>\sc Srivastava, R. K., Greff, K., and Schmidhuber, J.</strong> Highway networks.. <em>CoRR abs/1505.00387\/ (2015).</em></li>
-  <li id="ref-41"><strong>\sc Sutskever, I., Vinyals, O., and Le, Q. V.</strong> Sequence to sequence learning with neural networks.. <em>In Advances in Neural Information Processing Systems\/ (2014), pp. 3104--3112.</em></li>
-  <li id="ref-42"><strong>\sc Tu, Z., Lu, Z., Liu, Y., Liu, X., and Li, H.</strong> Coverage-based neural machine translation.. <em>In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics\/ (2016).</em></li>
-  <li id="ref-43"><strong>\sc Wu, J., Leng, C., Wang, Y., Hu, Q., and Cheng, J.</strong> Quantized convolutional neural networks for mobile devices.. <em>CoRR abs/1512.06473\/ (2015).</em></li>
-  <li id="ref-44"><strong>\sc Zaremba, W., Sutskever, I., and Vinyals, O.</strong> Recurrent neural network regularization, 2014.. <em></em></li>
-  <li id="ref-45"><strong>\sc Zhou, J., Cao, Y., Wang, X., Li, P., and Xu, W.</strong> Deep recurrent models with fast-forward connections for neural. <em>machine translation. CoRR abs/1606.04199\/ (2016). \endthebibliography</em></li>
+  <li id="ref-10"><strong>\sc Costa-Juss\`a, M. R., and Fonollosa, J. A. R.</strong> Character-based neural machine translation.. <em>CoRR abs/1603.00810\/ (2016).</em></li>
+  <li id="ref-11"><strong>\sc Dean, J., Corrado, G. S., Monga, R., Chen, K., Devin, M., Le, Q. V., Mao,</strong> M. Z., Ranzato, M., Senior, A., Tucker, P., Yang, K., and Ng, A. Y.. <em>Large scale distributed deep networks. In NIPS\/ (2012).</em></li>
+  <li id="ref-12"><strong>\sc Devlin, J., Zbib, R., Huang, Z., Lamar, T., Schwartz, R. M., and Makhoul,</strong> J.. <em>Fast and robust neural network joint models for statistical machine translation. In ACL (1)\/ (2014), Citeseer, pp. 1370--1380.</em></li>
+  <li id="ref-13"><strong>\sc Dong, D., Wu, H., He, W., Yu, D., and Wang, H.</strong> Multi-task learning for multiple language translation.. <em>In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics\/ (2015), pp. 1723--1732.</em></li>
+  <li id="ref-14"><strong>\sc Durrani, N., Haddow, B., Koehn, P., and Heafield, K.</strong> Edinburgh's phrase-based machine translation systems for WMT-14.. <em>In Proceedings of the Ninth Workshop on Statistical Machine Translation\/ (2014), Association for Computational Linguistics Baltimore, MD, USA, pp. 97--104.</em></li>
+  <li id="ref-15"><strong>\sc Fahlman, S. E., and Lebiere, C.</strong> The cascade-correlation learning architecture.. <em>In Advances in Neural Information Processing Systems 2\/ (1990), Morgan Kaufmann, pp. 524--532.</em></li>
+  <li id="ref-16"><strong>\sc Gers, F. A., Schmidhuber, J., and Cummins, F.</strong> Learning to forget: Continual prediction with LSTM.. <em>Neural computation 12, 10 (2000), 2451--2471.</em></li>
+  <li id="ref-17"><strong>\sc G\"ul\ccehre, \cC., Ahn, S., Nallapati, R., Zhou, B., and</strong> Bengio, Y.. <em>Pointing the unknown words. CoRR abs/1603.08148\/ (2016).</em></li>
+  <li id="ref-18"><strong>\sc Gupta, S., Agrawal, A., Gopalakrishnan, K., and Narayanan, P.</strong> Deep learning with limited numerical precision.. <em>CoRR abs/1502.02551\/ (2015).</em></li>
+  <li id="ref-19"><strong>\sc Han, S., Mao, H., and Dally, W. J.</strong> Deep compression: Compressing deep neural network with pruning,. <em>trained quantization and huffman coding. CoRR abs/1510.00149\/ (2015).</em></li>
+  <li id="ref-20"><strong>\sc He, K., Zhang, X., Ren, S., and Sun, J.</strong> Deep residual learning for image recognition.. <em>In IEEE Conference on Computer Vision and Pattern Recognition\/ (2015).</em></li>
+  <li id="ref-21"><strong>\sc Hochreiter, S., Bengio, Y., Frasconi, P., and Schmidhuber, J.</strong> Gradient flow in recurrent nets: the difficulty of learning long-term. <em>dependencies, 2001.</em></li>
+  <li id="ref-22"><strong>\sc Hochreiter, S., and Schmidhuber, J.</strong> Long short-term memory.. <em>Neural computation 9, 8 (1997), 1735--1780.</em></li>
+  <li id="ref-23"><strong>\sc Kalchbrenner, N., and Blunsom, P.</strong> Recurrent continuous translation models.. <em>In Conference on Empirical Methods in Natural Language Processing\/ (2013).</em></li>
+  <li id="ref-24"><strong>\sc Kingma, D. P., and Ba, J.</strong> Adam: A method for stochastic optimization.. <em>CoRR abs/1412.6980\/ (2014).</em></li>
+  <li id="ref-25"><strong>\sc Koehn, P., Och, F. J., and Marcu, D.</strong> Statistical phrase-based translation.. <em>In Proceedings of the 2003 Conference of the North American Chapter of the Association for Computational Linguistics\/ (2003).</em></li>
+  <li id="ref-26"><strong>\sc Li, F., and Liu, B.</strong> Ternary weight networks.. <em>CoRR abs/1605.04711\/ (2016).</em></li>
+  <li id="ref-27"><strong>\sc Luong, M., and Manning, C. D.</strong> Achieving open vocabulary neural machine translation with hybrid. <em>word-character models. CoRR abs/1604.00788\/ (2016).</em></li>
+  <li id="ref-28"><strong>\sc Luong, M.-T., Le, Q. V., Sutskever, I., Vinyals, O., and Kaiser, L.</strong> Multi-task sequence to sequence learning.. <em>In International Conference on Learning Representations\/ (2015).</em></li>
+  <li id="ref-29"><strong>\sc Luong, M.-T., Pham, H., and Manning, C. D.</strong> Effective approaches to attention-based neural machine translation.. <em>In Conference on Empirical Methods in Natural Language Processing\/ (2015).</em></li>
+  <li id="ref-30"><strong>\sc Luong, M.-T., Sutskever, I., Le, Q. V., Vinyals, O., and Zaremba, W.</strong> Addressing the rare word problem in neural machine translation.. <em>In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing\/ (2015).</em></li>
+  <li id="ref-31"><strong>\sc Norouzi, M., Bengio, S., Chen, Z., Jaitly, N., Schuster, M., Wu, Y., and</strong> Schuurmans, D.. <em>Reward augmented maximum likelihood for neural structured prediction. In Neural Information Processing Systems\/ (2016).</em></li>
+  <li id="ref-32"><strong>\sc Pascanu, R., Mikolov, T., and Bengio, Y.</strong> Understanding the exploding gradient problem.. <em>CoRR abs/1211.5063\/ (2012).</em></li>
+  <li id="ref-33"><strong>\sc Ranzato, M., Chopra, S., Auli, M., and Zaremba, W.</strong> Sequence level training with recurrent neural networks.. <em>In International Conference on Learning Representations\/ (2015).</em></li>
+  <li id="ref-34"><strong>\sc Schuster, M., and Nakajima, K.</strong> Japanese and Korean voice search.. <em>2012 IEEE International Conference on Acoustics, Speech and Signal Processing\/ (2012).</em></li>
+  <li id="ref-35"><strong>\sc Schuster, M., and Paliwal, K.</strong> Bidirectional recurrent neural networks.. <em>IEEE Transactions on Signal Processing 45, 11 (Nov. 1997), 2673--2681.</em></li>
+  <li id="ref-36"><strong>\sc S\'ebastien, J., Kyunghyun, C., Memisevic, R., and Bengio, Y.</strong> On using very large target vocabulary for neural machine translation.. <em>In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing\/ (2015).</em></li>
+  <li id="ref-37"><strong>\sc Sennrich, R., Haddow, B., and Birch, A.</strong> Neural machine translation of rare words with subword units.. <em>In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics\/ (2016).</em></li>
+  <li id="ref-38"><strong>\sc Shen, S., Cheng, Y., He, Z., He, W., Wu, H., Sun, M., and Liu, Y.</strong> Minimum risk training for neural machine translation.. <em>In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics\/ (2016).</em></li>
+  <li id="ref-39"><strong>\sc Srivastava, R. K., Greff, K., and Schmidhuber, J.</strong> Highway networks.. <em>CoRR abs/1505.00387\/ (2015).</em></li>
+  <li id="ref-40"><strong>\sc Sutskever, I., Vinyals, O., and Le, Q. V.</strong> Sequence to sequence learning with neural networks.. <em>In Advances in Neural Information Processing Systems\/ (2014), pp. 3104--3112.</em></li>
+  <li id="ref-41"><strong>\sc Tu, Z., Lu, Z., Liu, Y., Liu, X., and Li, H.</strong> Coverage-based neural machine translation.. <em>In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics\/ (2016).</em></li>
+  <li id="ref-42"><strong>\sc Wu, J., Leng, C., Wang, Y., Hu, Q., and Cheng, J.</strong> Quantized convolutional neural networks for mobile devices.. <em>CoRR abs/1512.06473\/ (2015).</em></li>
+  <li id="ref-43"><strong>\sc Zaremba, W., Sutskever, I., and Vinyals, O.</strong> Recurrent neural network regularization, 2014.. <em></em></li>
+  <li id="ref-44"><strong>\sc Zhou, J., Cao, Y., Wang, X., Li, P., and Xu, W.</strong> Deep recurrent models with fast-forward connections for neural. <em>machine translation. CoRR abs/1606.04199\/ (2016). \endthebibliography</em></li>
 </ol>
