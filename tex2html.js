@@ -322,18 +322,9 @@ function convertCitations(tex) {
     tex = tex.replace(/\\cite[pt]?\{([^}]+)\}/g, (_, keys) => {
         return keys.split(',').map(k => {
             const key = k.trim();
-            return `<sup class="ref-badge" data-ref="${key}">[${key}]</sup>`;
+            return `<sup class=\"ref-badge\" data-ref=\"${key}\">[${key}]</sup>`;
         }).join('');
     });
-
-    // Convert \mbox{[key]} style citations (common in some LaTeX templates)
-    tex = tex.replace(/\\mbox\{\[([^\]]+)\]\}/g, (_, inner) => {
-        return inner.split(',').map(k => {
-            const key = k.trim();
-            return `<sup class="ref-badge" data-ref="${key}">[${key}]</sup>`;
-        }).join('');
-    });
-
     return tex;
 }
 
