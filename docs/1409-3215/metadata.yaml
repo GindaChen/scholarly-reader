@@ -1,0 +1,34 @@
+title: Sequence to Sequence Learningwith Neural Networks
+short_title: Sequence to Sequence Learningwith Neural…
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1409.3215
+pdf: https://arxiv.org/pdf/1409.3215
+arxiv_id: '1409.3215'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1409.3215
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Deep Neural Networks (DNNs) are powerful models that have achieved
+  excellent performance on difficult learning tasks. Although DNNs work
+  well whenever large labeled training sets are available, 
+  they cannot be used to map sequences to sequences.  In this paper, we
+  present a general end-to-end approach to sequence learning that makes
+  minimal assumptions on the sequence structure. Our method uses a
+  multilayered Long Short-Term Memory (LSTM) to map the input sequence
+  to a vector of a fixed dimensio
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 3
+reference_count: 0
+sections: 6
+figures: 3

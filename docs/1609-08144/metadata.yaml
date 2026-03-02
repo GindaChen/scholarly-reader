@@ -1,0 +1,48 @@
+title: 'Google''s Neural Machine Translation System: Bridging the Gap between Human and Machine Translation'
+short_title: Google's Neural Machine Translation Syst…
+type: journal-article
+authors:
+  - given: Yonghui
+    family: Wu
+  - given: Mike
+    family: Schuster
+  - given: Zhifeng
+    family: Chen
+  - given: Quoc V.
+    family: Le
+  - given: ''
+    family: schuster
+  - given: ''
+    family: zhifengc
+  - given: ''
+    family: qvl
+date: '2026-03-01'
+url: https://arxiv.org/abs/1609.08144
+pdf: https://arxiv.org/pdf/1609.08144
+arxiv_id: '1609.08144'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1609.08144
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Neural Machine Translation (NMT) is an end-to-end learning approach for
+  automated translation, with the potential to overcome many of the weaknesses
+  of conventional phrase-based translation systems.
+  Unfortunately, NMT systems are known to be computationally expensive both in
+  training and in translation inference --
+  sometimes prohibitively so in the case of very large data sets and large models.
+  Several authors have also charged that NMT systems lack robustness,
+  particularly when input sentences 
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 14
+reference_count: 0
+sections: 11
+figures: 8

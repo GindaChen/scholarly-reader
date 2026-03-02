@@ -1,0 +1,32 @@
+title: Untitled Paper
+short_title: Untitled Paper
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1602.02410
+pdf: https://arxiv.org/pdf/1602.02410
+arxiv_id: '1602.02410'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1602.02410
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  In this work we explore recent advances in Recurrent Neural Networks for large scale Language
+  Modeling, a task central to language understanding. We extend current models to deal with two key
+  challenges present in this task: corpora and vocabulary sizes, and complex, long term structure of
+  language. We perform an exhaustive study on techniques such as character Convolutional Neural
+  Networks or Long-Short Term Memory, on the One Billion Word Benchmark. Our best single model
+  significantly improves
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 4
+reference_count: 0
+sections: 7
+figures: 2

@@ -1,0 +1,37 @@
+title: Neural Machine Translation  by Jointly Learning to Align and Translate
+short_title: Neural Machine Translation  by Jointly L…
+type: journal-article
+authors:
+  - given: Dzmitry Bahdanau Jacobs University
+    family: Bremen
+  - given: ''
+    family: Germany
+date: '2026-03-02'
+url: https://arxiv.org/abs/1409.0473
+pdf: https://arxiv.org/pdf/1409.0473
+arxiv_id: '1409.0473'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1409.0473
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Neural machine translation is a recently proposed approach to machine
+      translation. Unlike the traditional statistical machine translation, the
+      neural machine translation aims at building a single neural network that
+      can be jointly tuned to maximize the translation performance. The models
+      proposed recently for neural machine translation often belong to a family
+      of encoder--decoders and encode a source sentence into a fixed-length
+      vector from which a decoder generates a tra
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 29
+reference_count: 0
+sections: 11
+figures: 2

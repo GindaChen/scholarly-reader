@@ -1,0 +1,32 @@
+title: Layer Normalization
+short_title: Layer Normalization
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1607.06450
+pdf: https://arxiv.org/pdf/1607.06450
+arxiv_id: '1607.06450'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1607.06450
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  Training state-of-the-art, deep neural networks is computationally expensive. One way to reduce
+  the training time is to normalize the activities of the neurons.  A recently introduced technique
+  called batch normalization uses the distribution of the summed input to a neuron over a mini-batch
+  of training cases to compute a mean and variance which are then used to normalize the summed input
+  to that neuron on each training case.  This significantly reduces the training time in
+  feed-forward neural n
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 4
+reference_count: 0
+sections: 10
+figures: 5

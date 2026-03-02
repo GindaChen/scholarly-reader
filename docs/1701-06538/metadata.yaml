@@ -1,0 +1,34 @@
+title: |-
+  \Large Outrageously Large Neural Networks: 
+  The Sparsely-Gated Mixture-of-Experts Layer
+short_title: \Large Outrageously Large Neural Network…
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1701.06538
+pdf: https://arxiv.org/pdf/1701.06538
+arxiv_id: '1701.06538'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1701.06538
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  The capacity of a neural network to absorb information is limited by its number of parameters. 
+  Conditional computation, where parts of the network are active on a per-example basis, has been
+  proposed in theory as a way of dramatically increasing model capacity without a proportional
+  increase in computation.  In practice, however, there are significant algorithmic and performance
+  challenges.  In this work, we address these challenges and finally realize the promise of
+  conditional computation, ac
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 22
+reference_count: 0
+sections: 7
+figures: 4

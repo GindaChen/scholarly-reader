@@ -1,0 +1,34 @@
+title: Long Short-Term Memory-Networks for Machine Reading
+short_title: Long Short-Term Memory-Networks for Mach…
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1601.06733
+pdf: https://arxiv.org/pdf/1601.06733
+arxiv_id: '1601.06733'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1601.06733
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  In this paper we address the question of how to render
+            sequence-level networks better at handling structured input.
+            We propose a machine reading simulator which processes text
+            incrementally from left to right and performs shallow
+            reasoning with memory and attention. The reader extends the
+            Long Short-Term Memory architecture with a memory network in
+            place of a single memory cell. This enables adaptive memory
+            usage during recurr
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 16
+reference_count: 0
+sections: 8
+figures: 5

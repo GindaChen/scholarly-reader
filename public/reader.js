@@ -95,6 +95,8 @@
         extractVariables();
         extractReferences();
         setupMathToggles();
+        fixOrphanedLatex();
+        fixMboxCitations();
 
         // Set document title
         const docTitle = docData.title || article.querySelector('h1')?.textContent || state.docId;
@@ -856,8 +858,148 @@
     /**
      * Add click listeners to math blocks to toggle raw text view
      */
+    /**
+     * Fix orphaned raw LaTeX fragments between rendered KaTeX spans.
+     * Scans text nodes for common LaTeX patterns and wraps them in KaTeX.
+     */
+    function fixOrphanedLatex() {
+        if (!window.katex) return;
+        const latexPattern = /(?:\[a-zA-Z]+(?:\{[^}]*\})*|[a-zA-Z_^]+\{[^}]*\}|\[()\[\]])/;
+        const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                const p = node.parentElement;
+                if (!p) return NodeFilter.FILTER_REJECT;
+                if (p.closest('.katex, .katex-mathml, .katex-html, .math-raw, .math-inline, .math-display, code, pre, script, style')) return NodeFilter.FILTER_REJECT;
+                if (p.classList.contains('ref-badge')) return NodeFilter.FILTER_REJECT;
+                return latexPattern.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+        });
+        const nodes = [];
+        let n;
+        while ((n = walker.nextNode())) nodes.push(n);
+
+        nodes.forEach(node => {
+            const text = node.textContent;
+            // Only process if it looks like math (has backslashes or math operators)
+            if (!text.match(/\[a-zA-Z]+/)) return;
+            // Skip if it's just whitespace with a backslash
+            if (text.trim().length < 2) return;
+            try {
+                const rendered = katex.renderToString(text.trim(), {
+                    displayMode: false,
+                    throwOnError: false,
+                    trust: true,
+                });
+                // Only replace if KaTeX actually produced something meaningful
+                if (rendered && !rendered.includes('katex-error')) {
+                    const wrapper = document.createElement('span');
+                    wrapper.className = 'katex-inline';
+                    wrapper.innerHTML = rendered;
+                    node.parentNode.replaceChild(wrapper, node);
+                }
+            } catch (e) { /* leave as-is */ }
+        });
+    }
+
+    /**
+     * Fix \mbox{[key]} citations in pre-generated HTML by converting them to ref badges.
+     * Also converts bare [key] text that matches known bibliography entries.
+     */
+    function fixMboxCitations() {
+        // Build ref key map from bibliography
+        const refMap = {};
+        article.querySelectorAll('li[id^="ref-"]').forEach((li, idx) => {
+            const rawKey = li.id.replace('ref-', '');
+            const num = String(idx + 1);
+            const arxivMatch = (li.textContent || '').match(/arxiv[:/]+([0-9]{4}\.[0-9]{4,5}(?:v[0-9]+)?)/i);
+            const linkMatch = (li.innerHTML || '').match(/href="([^"]+)"/i);
+            const titleEl = li.querySelector('em') || li.querySelector('strong');
+            const title = titleEl ? titleEl.textContent.trim() : (li.textContent.split('.')[1] || '').trim() || rawKey;
+            refMap[rawKey] = { num, title, arxivId: arxivMatch ? arxivMatch[1] : '', url: linkMatch ? linkMatch[1] : '' };
+        });
+
+        // Also build map from existing ref-badge data attributes
+        article.querySelectorAll('.ref-badge[data-ref]').forEach(el => {
+            const key = el.dataset.ref;
+            if (!refMap[key] && el.dataset.title) {
+                refMap[key] = { num: key, title: el.dataset.title, arxivId: el.dataset.arxivId || '', url: el.dataset.url || '' };
+            }
+        });
+
+        if (Object.keys(refMap).length === 0) return;
+
+        // Find text nodes containing \mbox{[...]} or bare [key] patterns
+        const mboxPattern = /\\mbox\{\[([^\]]+)\]\}|\[([^\]]{2,60})\]/;
+        const walker = document.createTreeWalker(article, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                const p = node.parentElement;
+                if (!p) return NodeFilter.FILTER_REJECT;
+                if (p.closest('.katex, .katex-mathml, .katex-html, .math-raw, code, pre, script, style, .references')) return NodeFilter.FILTER_REJECT;
+                if (p.classList.contains('ref-badge')) return NodeFilter.FILTER_REJECT;
+                if (p.tagName === 'SUP') return NodeFilter.FILTER_REJECT;
+                return mboxPattern.test(node.textContent) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+        });
+
+        const textNodes = [];
+        let tn;
+        while ((tn = walker.nextNode())) textNodes.push(tn);
+
+        textNodes.forEach(node => {
+            const frag = document.createDocumentFragment();
+            let last = 0;
+            const text = node.textContent;
+            // Match \mbox{[key]} or [key]
+            const pat = /\mbox\{\[([^\]]+)\]\}|\[([^\]]{2,60})\]/g;
+            let m;
+            while ((m = pat.exec(text)) !== null) {
+                const inner = m[1] || m[2];
+                const keys = inner.split(/[,;]+/).map(k => k.trim()).filter(Boolean);
+                const matched = keys.filter(k => refMap[k]);
+                if (matched.length === 0) continue;
+
+                if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                last = m.index + m[0].length;
+
+                matched.forEach((key, i) => {
+                    const ref = refMap[key];
+                    const sup = document.createElement('sup');
+                    sup.className = 'ref-badge';
+                    sup.dataset.ref = ref.num;
+                    sup.dataset.title = ref.title;
+                    if (ref.arxivId) sup.dataset.arxivId = ref.arxivId;
+                    if (ref.url) sup.dataset.url = ref.url;
+                    sup.textContent = ref.num;
+                    sup.style.cursor = 'pointer';
+                    frag.appendChild(sup);
+                });
+            }
+            if (last > 0) {
+                if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+                node.parentNode.replaceChild(frag, node);
+            }
+        });
+    }
+
     function setupMathToggles() {
-        // No-op: math elements are display-only
+        // Render all math-raw spans via KaTeX
+        if (window.katex) {
+            article.querySelectorAll('.math-raw').forEach(span => {
+                const raw = span.textContent || '';
+                const isDisplay = span.closest('.math-display') !== null;
+                try {
+                    const rendered = katex.renderToString(raw, {
+                        displayMode: isDisplay,
+                        throwOnError: false,
+                        trust: true,
+                    });
+                    const wrapper = document.createElement('span');
+                    wrapper.className = isDisplay ? 'katex-display' : 'katex-inline';
+                    wrapper.innerHTML = rendered;
+                    span.replaceWith(wrapper);
+                } catch (e) { /* leave as-is */ }
+            });
+        }
     }
 
     // ═══════════════════════════════════════════════
@@ -2749,7 +2891,7 @@
                     opacity:0.85;box-shadow:0 8px 32px rgba(0,0,0,0.45);
                     border-radius:6px;top:${dragSrc.getBoundingClientRect().top}px;
                     left:${dragSrc.getBoundingClientRect().left}px;
-                    transition:none;background:var(--surface-1,#1e1e2e);
+                    transition:none;background:var(--surface-1,#1e1e2e);will-change:transform;
                 `;
                 document.body.appendChild(ghost);
                 dragSrc.style.opacity = '0.3';
@@ -2766,9 +2908,11 @@
                 container.appendChild(indicator);
             }
 
-            // Move ghost
-            ghost.style.top = (dragSrc.getBoundingClientRect().top + (e.clientY - startY)) + 'px';
-            ghost.style.left = (dragSrc.getBoundingClientRect().left + (e.clientX - startX)) + 'px';
+            // Move ghost using transform for smooth 60fps updates
+            requestAnimationFrame(() => {
+                if (!ghost) return;
+                ghost.style.transform = `translate(${e.clientX - startX}px, ${e.clientY - startY}px)`;
+            });
 
             // Update indicator position
             const { before } = getInsertTarget(e.clientX);

@@ -1,0 +1,32 @@
+title: 'Xception: Deep Learning with Depthwise Separable Convolutions'
+short_title: 'Xception: Deep Learning with Depthwise S…'
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1610.02357
+pdf: https://arxiv.org/pdf/1610.02357
+arxiv_id: '1610.02357'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1610.02357
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  We present an interpretation of Inception modules in convolutional neural networks as being an
+  intermediate step in-between regular convolution and the \textit{depthwise separable convolution}
+  operation (a depthwise convolution followed by a pointwise convolution). In this light, a
+  depthwise separable convolution can be understood as an Inception module with a maximally large
+  number of towers. This observation leads us to propose a novel deep convolutional neural network
+  architecture inspired by
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 0
+reference_count: 0
+sections: 6
+figures: 10

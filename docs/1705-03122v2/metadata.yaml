@@ -1,0 +1,26 @@
+title: Untitled Paper
+short_title: Untitled Paper
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1705.03122v2
+pdf: https://arxiv.org/pdf/1705.03122v2
+arxiv_id: 1705.03122v2
+archive: arxiv
+archive_url: https://arxiv.org/abs/1705.03122v2
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: ''
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 0
+reference_count: 0
+sections: 0
+figures: 0

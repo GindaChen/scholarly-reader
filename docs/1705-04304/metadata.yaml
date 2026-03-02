@@ -1,0 +1,44 @@
+title: A Deep Reinforced Model for Abstractive Summarization
+short_title: A Deep Reinforced Model for Abstractive …
+type: journal-article
+authors:
+  - given: Romain
+    family: Paulus
+  - given: Caiming Xiong \& Richard Socher Salesforce Research 172 University Avenue Palo
+    family: Alto
+  - given: CA
+    family: '94301'
+  - given: ''
+    family: cxiong
+  - given: ''
+    family: rsocher\
+date: '2026-03-01'
+url: https://arxiv.org/abs/1705.04304
+pdf: https://arxiv.org/pdf/1705.04304
+arxiv_id: '1705.04304'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1705.04304
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  Attentional, RNN-based encoder-decoder models for abstractive summarization have achieved good
+  performance on short input and output sequences. For longer documents and summaries however these
+  models often include repetitive and incoherent phrases. We introduce a neural network model with a
+  novel intra-attention that attends over the input and continuously generated output separately,
+  and a new training method that combines standard supervised word prediction and reinforcement
+  learning (RL). 
+
+  Mo
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 16
+reference_count: 0
+sections: 9
+figures: 1

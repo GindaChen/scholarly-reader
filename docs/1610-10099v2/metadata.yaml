@@ -1,0 +1,32 @@
+title: Untitled Paper
+short_title: Untitled Paper
+type: journal-article
+authors: []
+date: '2026-03-01'
+url: https://arxiv.org/abs/1610.10099v2
+pdf: https://arxiv.org/pdf/1610.10099v2
+arxiv_id: 1610.10099v2
+archive: arxiv
+archive_url: https://arxiv.org/abs/1610.10099v2
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  We present a novel neural network for processing sequences. The ByteNet is a one-dimensional
+  convolutional neural network that is composed of two parts, one to encode the source sequence and
+  the other to decode the target sequence. The two network parts are connected by stacking the
+  decoder on top of the encoder and preserving the temporal resolution of the sequences. To address
+  the differing lengths of the source and the target, we introduce an efficient mechanism by which
+  the decoder is dynami
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 2
+reference_count: 0
+sections: 7
+figures: 6

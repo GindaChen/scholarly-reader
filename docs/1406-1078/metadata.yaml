@@ -1,0 +1,33 @@
+title: "Learning Phrase Representations using RNN Encoder--Decoder  for\r\nStatistical Machine Translation"
+short_title: Learning Phrase Representations using RN…
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1406.1078
+pdf: https://arxiv.org/pdf/1406.1078
+arxiv_id: '1406.1078'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1406.1078
+source: arxiv-pipeline
+pipeline_version: '2.0'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  In this paper, we propose a novel neural network model called RNN
+      Encoder--Decoder that consists of two recurrent neural networks (RNN). One
+      RNN encodes a sequence of symbols into a fixed-length vector representation,
+      and the other decodes the representation into another sequence of symbols.
+      The encoder and decoder of the proposed model are jointly trained to
+      maximize the conditional probability of a target sequence given a source
+      sequence. The performance of a statistica
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 28
+reference_count: 0
+sections: 8
+figures: 7
