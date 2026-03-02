@@ -1,0 +1,34 @@
+title: Rethinking the Inception Architecture for Computer Vision
+short_title: Rethinking the Inception Architecture fo…
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1512.00567
+pdf: https://arxiv.org/pdf/1512.00567
+arxiv_id: '1512.00567'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1512.00567
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Convolutional networks are at the core of most state-of-the-art
+  computer vision solutions for a wide variety of tasks.
+  Since 2014 very deep convolutional networks started to become
+  mainstream, yielding substantial gains in various benchmarks.
+  Although increased model size and computational cost tend to
+  translate to immediate quality gains for most tasks (as long as enough
+  labeled data is provided for training), computational efficiency and
+  low parameter count are still enabling factors for vario
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 3
+reference_count: 23
+sections: 12
+figures: 10

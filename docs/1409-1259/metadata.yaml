@@ -1,0 +1,35 @@
+title: 'On the Properties of Neural Machine Translation: Encoder--Decoder Approaches'
+short_title: On the Properties of Neural Machine Tran…
+type: journal-article
+authors:
+  - given: Kyunghyun Cho~~~~~~~~~Bart van Merri\"enboer Universit\'e de
+    family: Montr\'eal
+date: '2026-03-02'
+url: https://arxiv.org/abs/1409.1259
+pdf: https://arxiv.org/pdf/1409.1259
+arxiv_id: '1409.1259'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1409.1259
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Neural machine translation is a relatively new approach to statistical
+      machine translation based purely on neural networks. The neural machine
+      translation models often consist of an encoder and a decoder. The encoder
+      extracts a fixed-length representation from a variable-length input
+      sentence, and the decoder generates a correct translation from this
+      representation. In this paper, we focus on analyzing the properties of the
+      neural machine translation using two models; RNN
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 9
+reference_count: 12
+sections: 7
+figures: 6

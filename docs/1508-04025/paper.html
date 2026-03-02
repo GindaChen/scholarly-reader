@@ -1,0 +1,878 @@
+<h1>Effective Approaches to Attention-based Neural Machine Translation</h1>
+
+<p class="authors"></p>
+
+<h2>Abstract</h2>
+<p>An attentional mechanism has lately been used to improve neural machine translation (NMT)
+by
+selectively focusing on parts of the source sentence during translation. However,
+there has been little work exploring useful architectures for attention-based
+NMT. This paper examines two simple and effective classes of attentional
+mechanism: a {\it global} approach which always attends to all source words and
+a {\it local} one that only looks at a subset of source words at a time. 
+We demonstrate the effectiveness of both approaches on the WMT translation
+tasks between English and German in both directions. With local
+attention, we achieve a significant gain of \attngain{} BLEU points over
+non-attentional systems that 
+already incorporate known techniques such as dropout. Our ensemble 
+model using different attention architectures yields a new
+state-of-the-art result in the WMT'15 English to German
+translation task with \sotanew{} BLEU points, an improvement of 1.0 BLEU points over the existing
+best system backed by NMT and an $n$-gram reranker.\footnote{All our code and models
+are publicly available at \url{http://nlp.stanford.edu/projects/nmt}.}</p>
+
+<hr>
+
+<h2>1. Introduction</h2>
+
+<span id="sec:intro" class="label-anchor"></span>
+Neural Machine Translation (NMT) achieved state-of-the-art performances in
+large-scale translation tasks such as from English to French <sup class="ref-badge" data-ref="10" data-title="2015.">10</sup> and
+English to German <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup>. NMT is appealing since it requires minimal
+domain knowledge and is conceptually simple. The model by \newcite{luong15} reads through all the source words until the end-of-sentence symbol \eos{} is reached. It then starts emitting one target word at a time, as illustrated in Figure~<a href="#f:lstm" class="cross-ref">Fig. 1</a>. NMT is often a large neural network that is trained in an end-to-end fashion and has the ability to generalize well to very long word sequences. This means the model does not have to explicitly store gigantic phrase tables and language models as in the case of standard MT; hence, NMT has a small memory footprint. Lastly, implementing NMT decoders is easy unlike the highly intricate decoders in standard MT <sup class="ref-badge" data-ref="8" data-title="2003.">8</sup>.
+
+<p>In parallel, the concept of ``attention" has gained popularity recently in
+training neural networks, allowing models to learn alignments between different
+modalities, e.g., between image objects and agent actions in the dynamic control
+problem <sup class="ref-badge" data-ref="11" data-title="2014.">11</sup>, between speech frames and text in the speech recognition
+task [jan14],  or between visual features of a picture and its text
+description in the image caption generation task <sup class="ref-badge" data-ref="14" data-title="Salakhutdinov, Richard S. Zemel, and Yoshua Bengio.">14</sup>. In the context of
+NMT, \newcite{bog15} has successfully applied such attentional mechanism to
+jointly translate and align words. To the best of our knowledge, there has not
+been any other work exploring the use of attention-based architectures for NMT.</p>
+
+<p>In this work, we design, with simplicity and effectiveness in mind, two novel
+types of attention-based models: a {\it global} approach in which all source
+words are attended and a {\it local} one whereby only a subset of source words
+are considered at a time. The former approach resembles the model of
+<sup class="ref-badge" data-ref="1" data-title="2015.">1</sup> but is simpler architecturally. The latter can be viewed as an
+interesting blend between the {\it hard} and {\it soft} attention models
+proposed in <sup class="ref-badge" data-ref="14" data-title="Salakhutdinov, Richard S. Zemel, and Yoshua Bengio.">14</sup>: \edit{it is computationally less expensive than the
+global model or the soft attention; at the same time, unlike the hard attention,
+the local attention is
+differentiable almost everywhere, making it easier to implement and
+train., which is very
+similar to our local attention and applied to the image generation task.
+However, as we detail later, our model is much simpler and can achieve good performance for NMT.} Besides, we also examine various
+alignment functions for our attention-based models.}</p>
+
+<p>Experimentally, we demonstrate that both of our approaches are
+effective in the WMT translation tasks between English and German in  both
+directions. \edit{Our attentional models yield a boost of up to \attngain{} BLEU over
+non-attentional systems which already incorporate known techniques such as
+dropout. For English to German translation, we achieve new state-of-the-art
+(SOTA)
+results for both WMT'14 and WMT'15, outperforming previous SOTA systems, backed by
+NMT models and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-gram LM rerankers, by more than 1.0 BLEU. We conduct
+extensive analysis to evaluate our models in terms of learning, the ability to
+handle long sentences, choices of attentional architectures, alignment quality, and translation
+outputs.</p>
+
+<p>}</p>
+
+<hr>
+
+<h2>2. Neural Machine Translation</h2>
+
+<span id="sec:nmt" class="label-anchor"></span>
+A neural machine translation system is a neural network that directly models the conditional probability <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mrow></mrow></msub><mi mathvariant="normal">∣</mi><msub><mi>x</mi><mrow></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p(\tgt{}|\src{})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.15em;"><span style="top:-1.85em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.15em;"><span style="top:-1.85em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> of translating
+a source sentence, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>x</mi><mi>n</mi></msub></mrow><annotation encoding="application/x-tex">\src{1},\ldots,\src{n}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, to a target sentence, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>y</mi><mi>m</mi></msub></mrow><annotation encoding="application/x-tex">\tgt{1},\ldots,\tgt{m}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1514em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>..}
+A basic form of NMT consists of two components: (a) an {\it encoder} which computes a representation <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\MB{s}</span></span> for each source sentence  and (b) a {\it decoder} which generates one target word at a time and hence decomposes the conditional probability as:
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\log p(\tgt{}|\src{}) = \sum_{j=1}^m \nolimits \log p\open{\tgt{j}|\tgt{&lt;j},\MB{s}}</span></div>
+
+<p>A natural choice to model such a decomposition in the decoder is to use a recurrent neural network (RNN) architecture, which most of the recent NMT work such as <sup class="ref-badge" data-ref="7" data-title="2013.">7</sup><sup class="ref-badge" data-ref="13" data-title="2014.">13</sup><sup class="ref-badge" data-ref="3" data-title="Schwenk, and Yoshua Bengio.">3</sup><sup class="ref-badge" data-ref="1" data-title="2015.">1</sup><sup class="ref-badge" data-ref="10" data-title="2015.">10</sup><sup class="ref-badge" data-ref="6" data-title="2015.">6</sup> have in common. They, however, differ in terms of which RNN architectures are used for the decoder and how the encoder computes the source sentence representation <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\MB{s}</span></span>.</p>
+
+<p>\newcite{kal13} used an RNN with the standard hidden unit for the decoder and a
+convolutional neural network for encoding the source sentence representation. On
+the other hand, both \newcite{sutskever14} and \newcite{luong15} stacked
+multiple layers of an RNN with a Long Short-Term Memory (LSTM) hidden unit for
+both the encoder and the decoder. \newcite{cho14}, \newcite{bog15}, and
+\newcite{jean15} all adopted a different version of the RNN with an
+LSTM-inspired hidden unit, the gated recurrent unit (GRU), for both
+components.</p>
+
+<p>In more detail, one can parameterize the probability of decoding each word <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">y_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7167em;vertical-align:-0.2861em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3117em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2861em;"><span></span></span></span></span></span></span></span></span></span></span> as:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">p\left(\tgt{j}|\tgt{&lt;j},\MB{s}\right) = \softmax\open{g\open{\h{j}}}</span></div>
+
+<p>with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span></span></span></span></span> being the transformation function that outputs a vocabulary-sized
+vector.<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;}&#x27; at position 15: as in <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup>.}̲ Here," style="color:#cc0000">as in <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup>.} Here,</span></span>\h{j}$ is the RNN hidden
+unit, abstractly computed as:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\h{j} = f(\h{j-1}, \MB{s}),</span></div>
+
+<p>where <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi></mrow><annotation encoding="application/x-tex">f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span></span></span></span></span> computes the current hidden state given the previous hidden state and
+can be either a vanilla RNN unit, a GRU, or an LSTM unit. In <sup class="ref-badge" data-ref="7" data-title="2013.">7</sup><sup class="ref-badge" data-ref="13" data-title="2014.">13</sup><sup class="ref-badge" data-ref="3" data-title="Schwenk, and Yoshua Bengio.">3</sup><sup class="ref-badge" data-ref="10" data-title="2015.">10</sup>, the source representation <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\MB{s}</span></span> is only used once to initialize the decoder hidden state. On the other hand, in <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup><sup class="ref-badge" data-ref="6" data-title="2015.">6</sup> and this work, <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\MB{s}</span></span>, in fact, implies a set of source hidden states which are consulted throughout the entire course of the translation process. Such an approach is referred to as an attention mechanism, which we will discuss next.</p>
+
+<p>In this work, following <sup class="ref-badge" data-ref="13" data-title="2014.">13</sup><sup class="ref-badge" data-ref="10" data-title="2015.">10</sup>, we use the stacking LSTM architecture for our NMT systems, as illustrated in Figure~<a href="#f:lstm" class="cross-ref">Fig. 1</a>.</p>
+
+<p>We use the LSTM unit defined in <sup class="ref-badge" data-ref="15" data-title="2015.">15</sup>. Our training objective is formulated as follows:</p>
+
+<div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>J</mi><mi>t</mi></msub><mo>=</mo><msub><mo>∑</mo><mrow><mo stretchy="false">(</mo><msub><mi>x</mi><mrow></mrow></msub><mo separator="true">,</mo><msub><mi>y</mi><mrow></mrow></msub><mo stretchy="false">)</mo><mo>∈</mo><mi mathvariant="double-struck">D</mi></mrow></msub><mo>−</mo><mi>log</mi><mo>⁡</mo><mi>p</mi><mo stretchy="false">(</mo><msub><mi>y</mi><mrow></mrow></msub><mi mathvariant="normal">∣</mi><msub><mi>x</mi><mrow></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">J_t = \sum_{(\src{},\tgt{}) \in \mathbb{D}} \nolimits -\log p(\tgt{}|\src{})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0962em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.8247em;vertical-align:-0.7747em;"></span><span class="mop"><span class="mop op-symbol large-op" style="position:relative;top:0em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.0747em;"><span style="top:-2.1003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mtight"><span class="mord mathnormal mtight">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.143em;"><span style="top:-1.857em;margin-left:0em;margin-right:0.0714em;"><span class="pstrut" style="height:2em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mpunct mtight">,</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.143em;"><span style="top:-1.857em;margin-left:-0.0359em;margin-right:0.0714em;"><span class="pstrut" style="height:2em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mclose mtight">)</span><span class="mrel mtight">∈</span><span class="mord mathbb mtight">D</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7747em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">−</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.15em;"><span style="top:-1.85em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.15em;"><span style="top:-1.85em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span></div>
+
+<p>with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="double-struck">D</mi></mrow><annotation encoding="application/x-tex">\mathbb{D}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6889em;"></span><span class="mord mathbb">D</span></span></span></span></span> being our parallel training corpus.</p>
+
+<hr>
+
+<h2>3. Attention-based Models</h2>
+
+<span id="sec:attn" class="label-anchor"></span>
+Our various attention-based models are classifed into two broad categories, {\it global} and {\it local}. These classes differ in terms of whether the ``attention'' is placed on all source positions or on only a few source positions. We illustrate these two model types in Figure~<a href="#f:soft_attn" class="cross-ref">Fig. 2</a> and <a href="#f:hard_attn" class="cross-ref">Fig. 3</a> respectively.
+
+<p>Common to these two types of models is the fact that at each time step <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span> in the decoding phase, both approaches first take as input the hidden state <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\hi</span></span> at the top layer of a stacking LSTM. The goal is then to derive a context vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\co</span></span> that captures relevant source-side information to help predict the current target word <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\tgt{t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>. While these models differ in how the context vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\co</span></span> is derived, they share the same subsequent steps.</p>
+
+<p>Specifically, given the target hidden state <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\hi</span></span> and the source-side context vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\co</span></span>, we employ a simple concatenation layer to combine the information from both vectors to produce an attentional hidden state as follows:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\hs = \tanh(\W{c}[\co; \hi])
+</span></div>
+
+<p>The attentional vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\hs</span></span> is then fed through the softmax layer to produce the predictive distribution formulated as:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Unexpected end of input in a macro argument, expected &#x27;}&#x27; at end of input: p(\tgt{t}|\tgt{" style="color:#cc0000">p(\tgt{t}|\tgt{</span></div>
+
+<p>We now detail how each model type computes the source-side context vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\co</span></span>.</p>
+
+### Global Attention
+<span id="subsec:global" class="label-anchor"></span>
+
+<p>The idea of a global attentional model is to consider all the hidden states of
+the encoder when deriving the context vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">c_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>. In this model type, a
+variable-length alignment vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span>, whose size equals the number of time
+steps on the source side, is derived by comparing the current target hidden
+state <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\hi</span></span> with each source hidden state <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\his</span></span>:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">
+\al(s) =\alignf(\hi, \his)</span></div>
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">=\frac{\exp \open{\score(\hi, \his)}}{\sum_{s&#x27;} \exp \open{\score(\hi,
+\MB{\bar{h}}_{s&#x27;})}} \notag</span></div>
+
+<p>Here, <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">score</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\score</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mop"><span class="mord mathrm">score</span></span></span></span></span></span> is referred as a {\it content-based} function for which we consider three different
+alternatives:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\score(\hi, \his)\!=\!\begin{cases}
+    \tp{\hi} \his &amp; {\it dot}\\
+    \tp{\hi} \MB{W_a} \his &amp; {\it general} \\
+    \tp{\MB{v}_a}\tanh\open{\MB{W_a} [\hi; \his]} &amp; {\it concat}
+\end{cases}</span></div>
+
+<p>Besides, in our early attempts to build attention-based models, we use
+a {\it location-based} function in which the alignment scores are
+computed from solely the target hidden state <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\hi</span></span> as
+follows:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\al = \softmax(\W{a}\hi)                                 {\it location}
+</span></div>
+
+<p>Given the alignment vector as weights, the
+context vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">c_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> is computed as the  weighted average over all the source hidden states. implies that
+all alignment vectors <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span> are of the same length. For short sentences, we only
+use the top part of <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span> and for long sentences, we ignore words near the end.}}</p>
+
+<p>*Comparison to [bog15*] --</p>
+
+<p>While our global attention approach is similar in spirit to the model proposed
+by \newcite{bog15}, there are several key differences which reflect how we have
+both simplified and generalized from the original model. First, we simply use
+hidden states at the top LSTM layers in both the encoder and decoder as
+illustrated in Figure~<a href="#f:soft_attn" class="cross-ref">Fig. 2</a>. \newcite{bog15}, on the other hand,
+use the concatenation of the forward and backward source 
+hidden states in the bi-directional encoder and target hidden
+states in their non-stacking uni-directional decoder. Second, our computation
+path is simpler; we go from $\hi \rightarrow \al \rightarrow \co \rightarrow
+\hs$ then make a prediction as detailed in \eq{e:hs}, \eq{e:predict}, and
+Figure~<a href="#f:soft_attn" class="cross-ref">Fig. 2</a>. On the other hand, at any time <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>, \newcite{bog15} build from the previous hidden state <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\h{t-1} \rightarrow \al \rightarrow \co \rightarrow \hi</span></span>, which, in turn, goes through a deep-output and a maxout layer before making predictions..} Lastly, \newcite{bog15} only experimented with one alignment function, the {\it concat} product; whereas we show later that the other alternatives are better.</p>
+
+### Local Attention
+
+<p>The global attention has a drawback that it has to attend to all words on the
+source side for each target word, which is expensive and can potentially render it impractical to
+translate longer sequences, e.g., paragraphs or documents.
+To address this deficiency, we propose a {\it local} attentional mechanism that
+chooses to focus only on a small subset of the source positions per target word.</p>
+
+<p>This model takes inspiration from the tradeoff between the {\it soft} and {\it
+hard} attentional models proposed by \newcite{xu15} to tackle the image caption
+generation task. In their work, soft attention refers to the global attention
+approach in which weights are placed ``softly'' over all patches in the source
+image. The hard attention, on the other hand, selects one patch
+of the image to attend to at a time. While less expensive at inference time, the
+hard attention model is non-differentiable and requires more complicated
+techniques such as variance reduction or reinforcement learning to train.</p>
+
+<p>Our local attention mechanism selectively focuses on a small window of
+context and is differentiable. This approach has an advantage of avoiding the expensive computation incurred in
+the soft attention and at the same time, is easier to train than the hard
+attention approach.
+In concrete details, the model first generates an aligned position <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">p_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> for each target word at time <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span>. The
+context vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\co</span></span> is then derived as a weighted average over the set of source hidden states within the window <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>p</mi><mi>t</mi></msub><mo>−</mo><mi>D</mi><mo separator="true">,</mo><msub><mi>p</mi><mi>t</mi></msub><mo>+</mo><mi>D</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[p_t-D, p_t+D]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:0.8778em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mclose">]</span></span></span></span></span>; <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi></mrow><annotation encoding="application/x-tex">D</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span></span></span></span></span> is
+empirically selected. Unlike the global approach, the local alignment vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span> is now fixed-dimensional, i.e., <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><mn>2</mn><mi>D</mi><mo>+</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">\inR{2D+1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.8413em;"></span><span class="mord"><span class="mord mathbb">R</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8413em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">D</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span></span>. 
+We consider two variants of the model as below.</p>
+
+<p>*Monotonic* alignment ({\bf \localm{}}) -- we simply set 
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>t</mi></msub><mtext> ⁣</mtext><mo>=</mo><mtext> ⁣</mtext><mi>t</mi></mrow><annotation encoding="application/x-tex">\pt\!=\!t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6151em;"></span><span class="mord mathnormal">t</span></span></span></span></span> assuming that source and target sequences are roughly
+monotonically aligned. The alignment vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span> is defined according to
+\eq{e:al}. is the same as
+the global model except that the vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span> is
+fixed-length and shorter.}}</p>
+
+<p>*Predictive* alignment ({\bf \localp{}}) --  
+instead of assuming monotonic alignments, our model predicts an aligned position as follows:</p>
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\pt = S \cdot \sigmoid(\tp{\MB{v}_p}\tanh(\W{p}\hi)),
+</span></div>
+
+<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\W{p}</span></span> and <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\MB{v}_p</span></span> are the model parameters which will be learned
+to predict positions. <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span></span></span> is the source sentence length. As a result of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">sigmoid</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\sigmoid</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mop"><span class="mord mathrm">sigmoid</span></span></span></span></span></span>, $\pt
+\in [0, S]<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">.</mi><mi>T</mi><mi>o</mi><mi>f</mi><mi>a</mi><mi>v</mi><mi>o</mi><mi>r</mi><mi>a</mi><mi>l</mi><mi>i</mi><mi>g</mi><mi>n</mi><mi>m</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>p</mi><mi>o</mi><mi>i</mi><mi>n</mi><mi>t</mi><mi>s</mi><mi>n</mi><mi>e</mi><mi>a</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">. To favor alignment points near</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord">.</span><span class="var" data-var="T" data-desc="Transpose" style="--var-color: #f0a050"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span><span class="mord mathnormal">o</span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mord mathnormal" style="margin-right:0.02778em;">or</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mord mathnormal">i</span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mord mathnormal">nm</span><span class="mord mathnormal">e</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">tp</span><span class="mord mathnormal">o</span><span class="mord mathnormal">in</span><span class="mord mathnormal">t</span><span class="mord mathnormal">s</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">e</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></span>\pt<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo separator="true">,</mo><mi>w</mi><mi>e</mi><mi>p</mi><mi>l</mi><mi>a</mi><mi>c</mi><mi>e</mi><mi>a</mi><mi>G</mi><mi>a</mi><mi>u</mi><mi>s</mi><mi>s</mi><mi>i</mi><mi>a</mi><mi>n</mi><mi>d</mi><mi>i</mi><mi>s</mi><mi>t</mi><mi>r</mi><mi>i</mi><mi>b</mi><mi>u</mi><mi>t</mi><mi>i</mi><mi>o</mi><mi>n</mi><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi><mi>e</mi><mi>d</mi><mi>a</mi><mi>r</mi><mi>o</mi><mi>u</mi><mi>n</mi><mi>d</mi></mrow><annotation encoding="application/x-tex">, we place a Gaussian distribution centered around</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.01968em;">pl</span><span class="mord mathnormal">a</span><span class="mord mathnormal">ce</span><span class="mord mathnormal">a</span><span class="mord mathnormal">G</span><span class="mord mathnormal">a</span><span class="mord mathnormal">u</span><span class="mord mathnormal">ss</span><span class="mord mathnormal">ian</span><span class="mord mathnormal">d</span><span class="mord mathnormal">i</span><span class="mord mathnormal">s</span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">ib</span><span class="mord mathnormal">u</span><span class="mord mathnormal">t</span><span class="mord mathnormal">i</span><span class="mord mathnormal">o</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">ce</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">t</span><span class="mord mathnormal" style="margin-right:0.02778em;">er</span><span class="mord mathnormal">e</span><span class="mord mathnormal">d</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">o</span><span class="mord mathnormal">u</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">d</span></span></span></span></span>\pt$ . Specifically, our alignment weights are now
+defined as:
+
+<div class="math-display"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;<span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Expected &#x27;EOF&#x27;, got &#x27;&amp;&#x27; at position 1: &amp;̲#x27; in math m…" style="color:#cc0000">&amp;#x27; in math mode at position 17: …mbox{\boldmath{</span></span>̲#1$}}" style="color:#cc0000">\al(s) = \alignf(\hi, \his) \exp \open{-\frac{(s-\pt)^2}{2\sigma^2}} 
+</span></div>
+
+<p>We use the same <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">align</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\alignf</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mop"><span class="mord mathrm">align</span></span></span></span></span></span> function as in
+\eq{e:al} and the standard deviation is empirically set as
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>σ</mi><mtext> ⁣</mtext><mo>=</mo><mtext> ⁣</mtext><mfrac><mi>D</mi><mn>2</mn></mfrac></mrow><annotation encoding="application/x-tex">\sigma\!=\!\frac{D}{2}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">σ</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:-0.1667em;"></span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1.2173em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8723em;"><span style="top:-2.655em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">D</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span>. Note that <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\pt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> is a {\it real} nummber; whereas <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="mord mathnormal">s</span></span></span></span></span>
+is an {\it integer} within the window centered at <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\pt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>. is similar to the
+local-m model except that we dynamically
+compute <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\pt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> and use a truncated Gaussian distribution to modify the original alignment
+weights <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\alignf(\hi, \his)</span></span> as shown in \eq{e:align_p}. By utilizing <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\pt</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>
+to derive <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span>, we can compute backprop gradients for <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\W{p}</span></span> and <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\MB{v}_p</span></span>.
+This model is differentiable almost everywhere.}</p>
+
+<p>*Comparison to [draw15*] --
+have proposed a {\it selective attention} mechanism, very
+similar to our local attention, for the image generation task. Their approach 
+allows the model to select an image patch of varying location and zoom. We,
+instead, use the same ``zoom'' for all target positions, which greatly
+simplifies the formulation and still achieves good
+performance.</p>
+
+### Input-feeding Approach
+<span id="subsec:input" class="label-anchor"></span>
+In our proposed global and local approaches, the attentional decisions are made
+independently, which is suboptimal. Whereas, in standard MT, a {\it coverage}
+set is often maintained during the translation process to keep track of which
+source words have been translated. Likewise, in attentional NMTs, alignment
+decisions should be made jointly taking into account past alignment information.
+To address that, we propose an {\it input-feeding} approach in which attentional
+vectors <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\hs</span></span> are concatenated with inputs at the next time steps as illustrated in
+Figure~<a href="#f:input" class="cross-ref">Fig. 4</a>. The effects of having such connections are two-fold:
+(a) we hope to make the model fully aware of previous alignment choices and (b)
+we create a very deep network spanning both horizontally and vertically.
+
+<p>{\it Comparison to other work} -- \newcite{bog15}
+use context vectors, similar to
+our <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\co</span></span>, in building subsequent hidden states, which can also 
+achieve the ``coverage'' effect. However, there has not been any analysis of 
+whether such connections are useful as done in this work. Also,
+our approach is more general; as illustrated in Figure~<a href="#f:input" class="cross-ref">Fig. 4</a>, it can be
+applied to general stacking recurrent architectures, including non-attentional
+models.</p>
+
+<p>\newcite{xu15} propose a {\it doubly attentional} approach with an
+additional constraint added to the training objective to make sure the model
+pays equal attention to all parts of the image during the caption generation process. Such a constraint can also be useful to capture the coverage set effect in NMT that we mentioned earlier. However, we chose to use the input-feeding approach since it provides flexibility for the model to decide on any attentional constraints it deems suitable.</p>
+
+<hr>
+
+<h2>4. Experiments</h2>
+
+<span id="sec:exp" class="label-anchor"></span>
+We evaluate the effectiveness of our models on the WMT translation tasks between
+English and German in both directions. newstest2013 (3000 sentences) is used as
+a development set to select our hyperparameters. Translation performances are
+reported in case-sensitive BLEU <sup class="ref-badge" data-ref="12" data-title="2002.">12</sup> on newstest2014 (2737 sentences) and
+newstest2015 (2169 sentences). \edit{Following <sup class="ref-badge" data-ref="10" data-title="2015.">10</sup>, we report
+translation quality using two types of BLEU: (a) {\it
+tokenized} and BLEU
+scores are computed with \texttt{multi-bleu.perl}.} BLEU to be comparable with
+existing NMT work and (b) {\it NIST}
+script as per WMT guideline.} BLEU to be comparable
+with WMT results.}
+
+<table class="article-table">
+  <caption>{\bf WMT'14 English-German results</caption>
+  <thead><tr>
+    <th>\bf{System}</th>
+    <th>\bf{Ppl}</th>
+    <th>\bf{BLEU}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>Winning WMT'14 system -- {\it phrase-based + large LM} <sup class="ref-badge" data-ref="2" data-title="2014.">2</sup></td>
+    <td></td>
+    <td>20.7</td>
+  </tr>
+  <tr>
+    <td>\multicolumn{3}{l}{{\it Existing NMT systems}}</td>
+  </tr>
+  <tr>
+    <td>RNNsearch <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup></td>
+    <td></td>
+    <td>16.5</td>
+  </tr>
+  <tr>
+    <td>RNNsearch + unk replace <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup></td>
+    <td></td>
+    <td>19.0</td>
+  </tr>
+  <tr>
+    <td>RNNsearch + unk replace + large vocab + {\it ensemble} 8 models <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup></td>
+    <td></td>
+    <td>{\bf 21.6}</td>
+  </tr>
+  <tr>
+    <td>\multicolumn{3}{l}{{\it Our NMT systems}}</td>
+  </tr>
+  <tr>
+    <td>Base</td>
+    <td>10.6</td>
+    <td>11.3</td>
+  </tr>
+  <tr>
+    <td>Base + reverse</td>
+    <td>9.9</td>
+    <td>12.6 ({\it +1.3})</td>
+  </tr>
+  <tr>
+    <td>Base + reverse + dropout</td>
+    <td>8.1</td>
+    <td>14.0 ({\it +1.4})</td>
+  </tr>
+  <tr>
+    <td>\hdashline
+Base + reverse + dropout + global attention ({\it location})</td>
+    <td>7.3</td>
+    <td>16.8 ({\it +2.8})</td>
+  </tr>
+  <tr>
+    <td>Base + reverse + dropout + global attention ({\it location}) + feed input</td>
+    <td>6.4</td>
+    <td>18.1 ({\it +1.3})</td>
+  </tr>
+  <tr>
+    <td>\hdashline
+Base + reverse + dropout + local-p attention ({\it general}) + feed input</td>
+    <td>\multirow{ 2}{*}{5.9}</td>
+    <td>19.0 ({\it +0.9})</td>
+  </tr>
+  <tr>
+    <td>Base + reverse + dropout + local-p attention ({\it general}) + feed input + unk replace</td>
+    <td></td>
+    <td>20.9 ({\it +1.9})</td>
+  </tr>
+  <tr>
+    <td>\hdashline
+{\it Ensemble} 8 models + unk replace</td>
+    <td></td>
+    <td>{\bf 23.0 ({\it +2.1})}</td>
+  </tr>
+  </tbody>
+</table>
+
+### Training Details
+All our models are trained on the WMT'14 training data consisting of 4.5M
+sentences pairs (116M English words, 110M German words). Similar to <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup>, we limit our vocabularies to be the top 50K most frequent words for both languages. Words not in these shortlisted vocabularies are converted into a universal token \unk{}.
+
+<p>When training our NMT systems, following <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup><sup class="ref-badge" data-ref="6" data-title="2015.">6</sup>, we filter out
+sentence pairs whose lengths exceed 50 words and shuffle mini-batches as we
+proceed. Our stacking LSTM models have 4 layers, each with 1000 cells, and
+1000-dimensional embeddings. We follow <sup class="ref-badge" data-ref="13" data-title="2014.">13</sup><sup class="ref-badge" data-ref="10" data-title="2015.">10</sup> in training
+NMT with similar settings: (a) our parameters are uniformly initialized in
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><mn>0.1</mn><mo separator="true">,</mo><mn>0.1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-0.1, 0.1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">0.1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">0.1</span><span class="mclose">]</span></span></span></span></span>, (b) we train for 10 epochs using plain SGD, (c) a simple learning
+rate schedule is employed -- we start with a learning rate of 1; after 5 epochs,
+we begin to halve the learning rate every epoch, (d) our mini-batch size is 128,
+and (e) the normalized gradient is rescaled whenever its norm exceeds 5.
+Additionally, we also use dropout with probability <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.2</mn></mrow><annotation encoding="application/x-tex">0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span></span> for our LSTMs as suggested by
+<sup class="ref-badge" data-ref="15" data-title="2015.">15</sup>. For dropout models, we train for 12 epochs and start halving
+the learning rate after 8 epochs. For local
+attention models, we empirically set the window size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi><mo>=</mo><mn>10</mn></mrow><annotation encoding="application/x-tex">D=10</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6833em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">10</span></span></span></span></span>.</p>
+
+<p>Our code is implemented in MATLAB. 
+When running on a single GPU device Tesla K40, we achieve a speed of 1K {\it
+target} words per second. It takes 7--10 days to completely train a model.</p>
+
+### English-German Results
+We compare our NMT systems in the English-German task with various other
+systems. These include the winning system in WMT'14
+<sup class="ref-badge" data-ref="2" data-title="2014.">2</sup>, a phrase-based system whose language models were trained on a
+huge monolingual text, the Common Crawl corpus. For end-to-end NMT systems, to the best of our knowledge, <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup> is the only work experimenting with this language pair and currently the SOTA system.
+We only present results for some of our attention models and will later
+analyze the rest in Section~<a href="#sec:analysis" class="cross-ref">Section 7</a>.
+
+<p>As shown in Table~<a href="#t:ende" class="cross-ref">Table 1</a>, we achieve progressive improvements when
+(a) reversing the source sentence, +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.3</mn></mrow><annotation encoding="application/x-tex">1.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.3</span></span></span></span></span> BLEU, as proposed in <sup class="ref-badge" data-ref="13" data-title="2014.">13</sup>
+and (b) using dropout, +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.4</mn></mrow><annotation encoding="application/x-tex">1.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.4</span></span></span></span></span> BLEU. On top of that, (c) the global
+attention approach gives a significant boost of +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2.8</mn></mrow><annotation encoding="application/x-tex">2.8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.8</span></span></span></span></span> BLEU, making 
+ our model slightly better than the base attentional system of
+ \newcite{bog15} (row {\it RNNSearch}). When (d) using the {\it input-feeding}
+approach, we seize another notable gain of +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.3</mn></mrow><annotation encoding="application/x-tex">1.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.3</span></span></span></span></span> BLEU and outperform their
+system. The local attention model with predictive alignments (row {\it \localp}) proves
+to be even better, giving us a further improvement of +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.9</mn></mrow><annotation encoding="application/x-tex">0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9</span></span></span></span></span> BLEU on top of the
+global attention model. 
+It is interesting to observe the trend previously reported in
+<sup class="ref-badge" data-ref="10" data-title="2015.">10</sup> that perplexity strongly correlates with translation quality.
+In total, we achieve a significant gain of
+\attngain{} BLEU points over the non-attentional baseline, which already includes
+known techniques such as source reversing and dropout.</p>
+
+<p>The unknown replacement technique proposed in <sup class="ref-badge" data-ref="10" data-title="2015.">10</sup><sup class="ref-badge" data-ref="6" data-title="2015.">6</sup> yields another nice
+gain of +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.9</mn></mrow><annotation encoding="application/x-tex">1.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.9</span></span></span></span></span> BLEU, demonstrating that our attentional models
+do learn useful alignments for unknown works. Finally, by ensembling 8 different
+models of various settings, e.g., using different attention approaches, with
+and without dropout etc., we were able to achieve a {\it new SOTA} result of
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>23.0</mn><mrow></mrow></mrow><annotation encoding="application/x-tex">\sotaold{}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">23.0</span><span class="mord"></span></span></span></span></span>
+BLEU, outperforming the existing best system <sup class="ref-badge" data-ref="6" data-title="2015.">6</sup> by +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.4</mn></mrow><annotation encoding="application/x-tex">1.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.4</span></span></span></span></span> BLEU.</p>
+
+<table class="article-table">
+  <caption>{\bf WMT'15 English-German results</caption>
+  <thead><tr>
+    <th>\bf{System}</th>
+    <th>\bf{BLEU}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>Top -- {\it NMT + 5-gram rerank} (Montreal)</td>
+    <td>24.9</td>
+  </tr>
+  <tr>
+    <td>Our ensemble 8 models + unk replace</td>
+    <td>{\bf 25.9}</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>{\it Latest results in WMT'15} -- despite the fact that our models were trained
+on WMT'14 with slightly less data, we test them on newstest2015 to demonstrate
+that they can generalize well to different test sets. As shown in Table~<a href="#t:wmt15ende" class="cross-ref">Table 2</a>, our best
+system establishes a {\it new SOTA} performance of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>25.9</mn><mrow></mrow></mrow><annotation encoding="application/x-tex">\sotanew{}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">25.9</span><span class="mord"></span></span></span></span></span> BLEU,
+outperforming the existing best system backed by NMT and a 5-gram LM reranker
+by +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.0</mn></mrow><annotation encoding="application/x-tex">1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.0</span></span></span></span></span>
+BLEU.</p>
+
+### German-English Results
+We carry out a similar set of experiments for the WMT'15 translation task from German
+to English. 
+While our systems have not yet matched the performance of the 
+SOTA system, we nevertheless show the effectiveness of our
+approaches with large and progressive gains in terms of BLEU as illustrated in
+Table~<a href="#t:deen" class="cross-ref">Table 3</a>. 
+The {\it attentional} mechanism gives us +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2.2</mn></mrow><annotation encoding="application/x-tex">2.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.2</span></span></span></span></span> BLEU gain and on top of that, we
+obtain another boost of up to +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.0</mn></mrow><annotation encoding="application/x-tex">1.0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">1.0</span></span></span></span></span> BLEU from the {\it input-feeding} approach.
+Using a better alignment function, the content-based {\it dot} product one,
+together with {\it dropout} yields another gain of +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2.7</mn></mrow><annotation encoding="application/x-tex">2.7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.7</span></span></span></span></span> BLEU. Lastly, when
+applying the unknown word replacement technique, we seize an additional +<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2.1</mn></mrow><annotation encoding="application/x-tex">2.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">2.1</span></span></span></span></span>
+BLEU, demonstrating the usefulness of attention in aligning rare words.
+
+<hr>
+
+<h2>5. Analysis</h2>
+
+<span id="sec:analysis" class="label-anchor"></span>
+\edit{We conduct extensive analysis to better understand our models in terms
+of learning, the ability to handle long sentences, 
+choices of attentional architectures, and alignment quality.} All results
+reported here are on English-German newstest2014.
+<table class="article-table">
+  <caption>{\bf WMT'15 German-English results</caption>
+  <thead><tr>
+    <th>\bf{System}</th>
+    <th>\bf{Ppl.}</th>
+    <th>\bf{BLEU}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\multicolumn{3}{l}{{\it WMT'15 systems}}</td>
+  </tr>
+  <tr>
+    <td>SOTA -- {\it phrase-based} (Edinburgh)</td>
+    <td></td>
+    <td>{\bf 29.2}</td>
+  </tr>
+  <tr>
+    <td>NMT + 5-gram rerank (MILA)</td>
+    <td></td>
+    <td>27.6</td>
+  </tr>
+  <tr>
+    <td>\multicolumn{3}{l}{{\it Our NMT systems}}</td>
+  </tr>
+  <tr>
+    <td>Base (reverse)</td>
+    <td>14.3</td>
+    <td>16.9</td>
+  </tr>
+  <tr>
+    <td>\hdashline
++ global ({\it location})</td>
+    <td>12.7</td>
+    <td>19.1 ({\it +2.2})</td>
+  </tr>
+  <tr>
+    <td>+ global ({\it location}) + feed</td>
+    <td>10.9</td>
+    <td>20.1 ({\it +1.0})</td>
+  </tr>
+  <tr>
+    <td>\hdashline
++ global ({\it dot}) + drop + feed</td>
+    <td>\multirow{ 2}{*}{9.7}</td>
+    <td>22.8 ({\it +2.7})</td>
+  </tr>
+  <tr>
+    <td>+ global ({\it dot}) + drop + feed + unk</td>
+    <td></td>
+    <td>24.9 ({\it +2.1})</td>
+  </tr>
+  </tbody>
+</table>
+
+### Learning curves
+We compare models built on top of one another
+
+<p>as listed in Table~<a href="#t:ende" class="cross-ref">Table 1</a>. It is
+pleasant to observe in Figure~<a href="#f:learn" class="cross-ref">Fig. 5</a> a clear separation between non-attentional and attentional
+models. The input-feeding approach and the local attention
+model also demonstrate their abilities in driving the test costs lower. The
+non-attentional model with 
+dropout (the blue + curve) learns slower than other non-dropout models, but
+as time goes by, it becomes more robust in terms of minimizing test errors.</p>
+
+### Effects of Translating Long Sentences
+We follow <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup> to group sentences of similar lengths together and
+compute a BLEU score per group. Figure~<a href="#f:length" class="cross-ref">Fig. 6</a> shows that
+our attentional models are more effective than the non-attentional one in
+handling long sentences: the quality does not degrade as sentences
+become longer. Our best model (the blue + curve) outperforms all other systems in all length buckets.
+
+### Choices of Attentional Architectures
+We examine different attention models ({\it global, local-m, local-p}) and different
+alignment functions ({\it location, dot, general, concat}) as described in
+Section~<a href="#sec:attn" class="cross-ref">Section 3</a>. Due to limited
+resources, we cannot run all the possible combinations.
+However, results in Table~<a href="#t:attnChoices" class="cross-ref">Table 4</a> do give us some idea about
+different choices. 
+The {\it location-based} function does not learn good
+alignments: the {\it global (location)} model can only obtain a small
+gain when performing unknown word replacement compared to using other alignment
+functions.<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi><mi>s</mi><mi>i</mi><mi>n</mi><mi>p</mi><mi>u</mi><mi>t</mi><mi>a</mi><mi>n</mi><mi>d</mi><mi>t</mi><mi>h</mi><mi>e</mi><mi>n</mi><mi>c</mi><mi>o</mi><mi>m</mi><mi>p</mi><mi>u</mi><mi>t</mi><mi>e</mi></mrow><annotation encoding="application/x-tex">as input and then compute</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">a</span><span class="mord mathnormal">s</span><span class="mord mathnormal">in</span><span class="mord mathnormal">p</span><span class="mord mathnormal">u</span><span class="mord mathnormal">t</span><span class="mord mathnormal">an</span><span class="mord mathnormal">d</span><span class="mord mathnormal">t</span><span class="var" data-var="h" data-desc="Number of parallel attention heads (h = 8)" style="--var-color: #ff7b72"><span class="mord mathnormal">h</span></span><span class="mord mathnormal">e</span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span><span class="mord mathnormal">co</span><span class="mord mathnormal">m</span><span class="mord mathnormal">p</span><span class="mord mathnormal">u</span><span class="mord mathnormal">t</span><span class="mord mathnormal">e</span></span></span></span></span>\hi, \al, \co<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo separator="true">,</mo><mi>a</mi><mi>n</mi><mi>d</mi></mrow><annotation encoding="application/x-tex">, and</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord mathnormal">an</span><span class="mord mathnormal">d</span></span></span></span></span>\hs$ before
+predicting <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\tgt{t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span>, the alignment vector <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\al</span></span> is used as alignment
+weights for (a) the predicted word <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\tgt{t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> in the {\it location-based}
+alignment functions and (b) the input word <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub></mrow><annotation encoding="application/x-tex">\tgt{t-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6389em;vertical-align:-0.2083em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0359em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span></span></span></span></span> in the {\it content-based}
+functions.}
+For {\it content-based} functions, our implementation {\it concat} does not yield good performances
+and more analysis should be done to understand the
+reason., the perplexities achieved by different models are 6.7 (global), 7.1
+(local-m), and 7.1 (local-p). Such high perplexities could be due to the fact
+that we simplify the matrix \MB{W_a} to set the part that corresponds to <span class="math-inline"><span class="katex-error" title="ParseError: KaTeX parse error: Can&#x27;t use function &#x27;$&#x27; in math mode at position 17: …mbox{\boldmath{$̲#1$}}" style="color:#cc0000">\his</span></span>
+to identity.} It is interesting to observe that {\it dot} works
+well for the global attention and {\it general} is better for the local
+attention.
+Among the different models, the local attention model with predictive alignments ({\it
+local-p}) is best, both in terms of perplexities and BLEU.
+
+<table class="article-table">
+  <caption>{\bf Attentional Architectures</caption>
+  <thead><tr>
+    <th>\multirow{ 2}{*}{\bf{System}}</th>
+    <th>\multirow{ 2}{*}{\bf{Ppl}}</th>
+    <th>\multicolumn{2}{c}{{\bf BLEU}}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td></td>
+    <td></td>
+    <td>Before</td>
+    <td>After unk</td>
+  </tr>
+  <tr>
+    <td>global (location)</td>
+    <td>6.4</td>
+    <td>18.1</td>
+    <td>19.3 (+1.2)</td>
+  </tr>
+  <tr>
+    <td>global (dot)</td>
+    <td>6.1</td>
+    <td>18.6</td>
+    <td>20.5 (+1.9)</td>
+  </tr>
+  <tr>
+    <td>global (general)</td>
+    <td>6.1</td>
+    <td>17.3</td>
+    <td>19.1 (+1.8)</td>
+  </tr>
+  <tr>
+    <td>local-m (dot)</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span>7.0</td>
+    <td>x</td>
+    <td>x</td>
+  </tr>
+  <tr>
+    <td>local-m (general)</td>
+    <td>6.2</td>
+    <td>18.6</td>
+    <td>20.4 (+1.8)</td>
+  </tr>
+  <tr>
+    <td>local-p (dot)</td>
+    <td>6.6</td>
+    <td>18.0</td>
+    <td>19.6 (+1.9)</td>
+  </tr>
+  <tr>
+    <td>local-p (general)</td>
+    <td>{\bf 5.9}</td>
+    <td>{\bf 19}</td>
+    <td>{\bf 20.9 (+1.9)}</td>
+  </tr>
+  </tbody>
+</table>
+
+<table class="article-table">
+  <caption>{\bf Sample translations</caption>
+  <thead><tr>
+    <th>}
+\multicolumn{2}{l}{{\bf English-German translations}}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>src</td>
+    <td>Orlando Bloom and Miranda Kerr still love each other</td>
+  </tr>
+  <tr>
+    <td>ref</td>
+    <td>Orlando Bloom und \correct{Miranda Kerr} lieben sich noch immer</td>
+  </tr>
+  <tr>
+    <td>{\it best}</td>
+    <td>Orlando Bloom und \correct{Miranda Kerr} lieben einander noch immer .</td>
+  </tr>
+  <tr>
+    <td>base</td>
+    <td>Orlando Bloom und \wrong{Lucas Miranda} lieben einander noch immer .</td>
+  </tr>
+  <tr>
+    <td>src</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> We <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup></mrow><annotation encoding="application/x-tex">&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span></span></span></span></span> re pleased the FAA recognizes that an enjoyable passenger experience is not incompatible with safety and security , <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> said Roger Dow , CEO of the U.S. Travel Association .</td>
+  </tr>
+  <tr>
+    <td>ref</td>
+    <td>`` Wir freuen uns , dass die FAA erkennt , dass ein angenehmes
+Passagiererlebnis nicht im Widerspruch zur Sicherheit steht '' , sagte
+\correct{Roger Dow} , CEO der U.S. Travel Association .</td>
+  </tr>
+  <tr>
+    <td>{\it best}</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> Wir freuen uns , dass die FAA anerkennt , dass ein angenehmes ist
+nicht mit Sicherheit und Sicherheit \correct{unvereinbar} ist <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> , sagte \correct{Roger
+Dow} , CEO der US - die .</td>
+  </tr>
+  <tr>
+    <td>base</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> Wir freuen uns \"{u}ber die <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>unk<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span> , dass ein <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>unk<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span> <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>unk<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span>
+mit Sicherheit nicht \wrong{vereinbar} ist mit Sicherheit und Sicherheit <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mrow></mrow><mrow><mo mathvariant="normal">′</mo><mo mathvariant="normal">′</mo></mrow></msup></mrow><annotation encoding="application/x-tex">&#x27;&#x27;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7519em;"></span><span class="mord"><span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7519em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′′</span></span></span></span></span></span></span></span></span></span></span></span></span> ,
+sagte \correct{Roger} \wrong{Cameron} , CEO der US - <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>unk<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span> .</td>
+  </tr>
+  <tr>
+    <td>\multicolumn{2}{l}{{\bf German-English translations}}</td>
+  </tr>
+  <tr>
+    <td>src</td>
+    <td>In einem Interview sagte Bloom jedoch , dass er und Kerr sich noch immer lieben .</td>
+  </tr>
+  <tr>
+    <td>ref</td>
+    <td>However , in an interview , Bloom has said that he and \correct{Kerr} still love each other .</td>
+  </tr>
+  <tr>
+    <td>{\it best}</td>
+    <td>In an interview , however , Bloom said that he and \correct{Kerr} still love .</td>
+  </tr>
+  <tr>
+    <td>base</td>
+    <td>However , in an interview , Bloom said that he and \wrong{Tina} were still <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&lt;</mo></mrow><annotation encoding="application/x-tex">&lt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&lt;</span></span></span></span></span>unk<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>&gt;</mo></mrow><annotation encoding="application/x-tex">&gt;</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5782em;vertical-align:-0.0391em;"></span><span class="mrel">&gt;</span></span></span></span></span> .</td>
+  </tr>
+  <tr>
+    <td>src</td>
+    <td>Wegen der von Berlin und der Europ\"{a}ischen Zentralbank verh\"{a}ngten strengen Sparpolitik in Verbindung mit der Zwangsjacke , in die die jeweilige nationale Wirtschaft durch das Festhalten an der gemeinsamen W\"{a}hrung gen\"{o}tigt wird , sind viele Menschen der Ansicht , das Projekt Europa sei zu weit gegangen</td>
+  </tr>
+  <tr>
+    <td>ref</td>
+    <td>The \correct{austerity imposed by Berlin and the European Central Bank , coupled with the straitjacket} imposed on national economies through adherence to the common currency , has led many people to think Project Europe has gone too far .</td>
+  </tr>
+  <tr>
+    <td>{\it best}</td>
+    <td>Because of the strict \correct{austerity measures imposed by Berlin
+and the European Central Bank in connection with the straitjacket} in which the
+respective national economy is forced to adhere to the common currency , many
+people believe that the European project has gone too far .</td>
+  </tr>
+  <tr>
+    <td>base</td>
+    <td>Because of the pressure \wrong{imposed by the European Central Bank and the Federal Central Bank with the strict austerity} imposed on the national economy in the face of the single currency , many people believe that the European project has gone too far .</td>
+  </tr>
+  </tbody>
+</table>
+
+### Alignment Quality
+A by-product of attentional models are word alignments. While <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup>
+visualized alignments for some sample sentences and 
+observed gains in translation quality as an indication of a working attention
+model, no work has assessed the alignments learned as a whole. In contrast, we
+set out to evaluate the alignment quality using the alignment error rate (AER)
+metric.
+
+<table class="article-table">
+  <caption>{\bf AER scores</caption>
+  <thead><tr>
+    <th>{\bf Method}</th>
+    <th>{\bf AER}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>global (location)</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.39</mn></mrow><annotation encoding="application/x-tex">0.39</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.39</span></span></span></span></span></td>
+  </tr>
+  <tr>
+    <td>local-m (general)</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.34</mn></mrow><annotation encoding="application/x-tex">0.34</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.34</span></span></span></span></span></td>
+  </tr>
+  <tr>
+    <td>local-p (general)</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.36</mn></mrow><annotation encoding="application/x-tex">0.36</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.36</span></span></span></span></span></td>
+  </tr>
+  <tr>
+    <td>\hdashline
+      ensemble</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.34</mn></mrow><annotation encoding="application/x-tex">0.34</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.34</span></span></span></span></span></td>
+  </tr>
+  <tr>
+    <td>Berkeley Aligner</td>
+    <td><span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>0.32</mn></mrow><annotation encoding="application/x-tex">0.32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.32</span></span></span></span></span></td>
+  </tr>
+  </tbody>
+</table>
+
+<p>Given the gold alignment data provided by RWTH for 508 English-German
+Europarl sentences, we ``force'' decode our attentional models to
+produce translations that match the references. We extract only one-to-one
+alignments by selecting the source word with the highest alignment
+weight per target word. Nevertheless, as shown in Table~<a href="#t:alignment" class="cross-ref">Table 6</a>, we were able to achieve AER scores
+comparable to the one-to-many alignments obtained by the Berkeley aligner
+<sup class="ref-badge" data-ref="9" data-title="2006.">9</sup>.</p>
+
+<p>We also found that the alignments produced by local attention models achieve
+lower AERs than those of the global one. The AER obtained by the ensemble, while
+good, is not better than the local-m AER, suggesting the well-known
+observation that AER and translation scores are not well correlated <sup class="ref-badge" data-ref="4" data-title="2007.">4</sup>.</p>
+
+<p>We show some alignment visualizations in Appendix~<a href="#sec:visual" class="cross-ref">Section 10</a>.</p>
+
+### Sample Translations
+<span id="sec:sample" class="label-anchor"></span>
+We show in Table~<a href="#t:sample" class="cross-ref">Table 5</a> sample translations in both directions. It it
+appealing to observe the effect of attentional models in correctly translating
+names such as ``Miranda Kerr'' and ``Roger Dow''. Non-attentional models, while producing sensible names from a language
+model perspective, lack the direct connections from the source side to make
+correct translations. 
+We also observed an interesting case in the second
+example, which requires translating the {\it doubly-negated} phrase, ``not incompatible''.
+The attentional model correctly produces ``nicht <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>…</mo></mrow><annotation encoding="application/x-tex">\dots</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.123em;"></span><span class="minner">…</span></span></span></span></span> unvereinbar'';
+whereas the non-attentional model generates ``nicht vereinbar'', meaning
+``not compatible''. The attentional
+model also demonstrates its superiority in translating long sentences as in
+the last example.
+
+<hr>
+
+<h2>6. Related Work</h2>
+
+
+
+<hr>
+
+<h2>7. Conclusion</h2>
+
+<span id="sec:conclude" class="label-anchor"></span>
+In this paper, we propose two simple and effective attentional mechanisms for
+neural machine translation: the {\it global} approach which always looks at all
+source positions and the {\it local} one that only attends to a subset of source
+positions at a time. We test the effectiveness of our models in the WMT
+translation tasks between English and German in both directions. 
+Our local attention yields large gains of up to
+<span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>5.0</mn><mrow></mrow></mrow><annotation encoding="application/x-tex">\attngain{}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">5.0</span><span class="mord"></span></span></span></span></span> BLEU over non-attentional models which already incorporate known
+techniques such as dropout. For the English to German translation direction, our
+ensemble model has established new state-of-the-art
+results for both WMT'14 and WMT'15, outperforming existing
+best systems, backed by NMT models and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-gram LM rerankers, by more than 1.0 BLEU.
+
+<p>We have compared various alignment functions and shed light on which functions
+are best for which attentional models.
+Our analysis shows that attention-based NMT models are superior to
+non-attentional ones in many cases, for example in translating names and
+handling long
+sentences.</p>
+
+<hr>
+
+<h2>8. Acknowledgment</h2>
+
+<p>We gratefully acknowledge support from a gift from Bloomberg L.P.
+and the support of NVIDIA Corporation with the donation of Tesla K40 GPUs.
+We thank Andrew Ng and his group as well as the Stanford Research
+Computing for letting us use their computing
+resources.
+We thank Russell Stewart for helpful discussions on the 
+models. Lastly, we thank Quoc Le, Ilya Sutskever, Oriol Vinyals,
+Richard Socher, Michael Kayser, Jiwei Li, Panupong Pasupat, Kelvin
+Guu, members of the Stanford NLP Group and the annonymous reviewers for their valuable comments and feedback.</p>
+
+<p>\bibliography{emnlp15}
+\bibliographystyle{acl2015}
+\appendix</p>
+
+<hr>
+
+<h2>9. Alignment Visualization</h2>
+
+<span id="sec:visual" class="label-anchor"></span>
+We visualize the alignment weights produced by our different attention
+models in Figure~<a href="#i:alignment" class="cross-ref">Fig. 7</a>. The visualization of the local
+attention model is much sharper than that of the global one. This contrast matches
+our expectation that local attention is designed to only focus on a subset of
+words each time. Also, since we
+translate from English to German and reverse the source English sentence, the white strides
+at the words {\it ``reality''} and {\it ``.''} in the global attention model reveals an
+interesting access pattern: it tends to refer back to the beginning of the
+source sequence.
+
+<p>Compared to the alignment visualizations in <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup>, our
+alignment patterns are not as sharp as theirs. Such difference could possibly be due to
+the fact that translating from English to German is
+harder than translating into French as done in <sup class="ref-badge" data-ref="1" data-title="2015.">1</sup>,
+which is an interesting point to examine in future work.</p>
+
+<hr>
+
+<h2>References</h2>
+<ol class="references">
+  <li id="ref-1"><strong>D. Bahdanau, K. Cho, and Y. Bengio.</strong> 2015.. <em>Neural machine translation by jointly learning to align and translate. In ICLR.</em></li>
+  <li id="ref-2"><strong>Christian Buck, Kenneth Heafield, and Bas van Ooyen.</strong> 2014.. <em>N-gram counts and language models from the common crawl. In LREC.</em></li>
+  <li id="ref-3"><strong>Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger</strong> Schwenk, and Yoshua Bengio.. <em>2014. Learning phrase representations using RNN encoder-decoder for statistical machine translation. In EMNLP.</em></li>
+  <li id="ref-4"><strong>Alexander Fraser and Daniel Marcu.</strong> 2007.. <em>Measuring word alignment quality for statistical machine translation. Computational Linguistics, 33(3):293--303.</em></li>
+  <li id="ref-5"><strong>Karol Gregor, Ivo Danihelka, Alex Graves, Danilo Jimenez Rezende, and Daan</strong> Wierstra.. <em>2015. DRAW: A recurrent neural network for image generation. In ICML.</em></li>
+  <li id="ref-6"><strong>S\'ebastien Jean, Kyunghyun Cho, Roland Memisevic, and Yoshua Bengio.</strong> 2015.. <em>On using very large target vocabulary for neural machine translation. In ACL.</em></li>
+  <li id="ref-7"><strong>N. Kalchbrenner and P. Blunsom.</strong> 2013.. <em>Recurrent continuous translation models. In EMNLP.</em></li>
+  <li id="ref-8"><strong>Philipp Koehn, Franz Josef Och, and Daniel Marcu.</strong> 2003.. <em>Statistical phrase-based translation. In NAACL.</em></li>
+  <li id="ref-9"><strong>P. Liang, B. Taskar, and D. Klein.</strong> 2006.. <em>Alignment by agreement. In NAACL.</em></li>
+  <li id="ref-10"><strong>M.-T. Luong, I. Sutskever, Q. V. Le, O. Vinyals, and W. Zaremba.</strong> 2015.. <em>Addressing the rare word problem in neural machine translation. In ACL.</em></li>
+  <li id="ref-11"><strong>Volodymyr Mnih, Nicolas Heess, Alex Graves, and Koray Kavukcuoglu.</strong> 2014.. <em>Recurrent models of visual attention. In NIPS.</em></li>
+  <li id="ref-12"><strong>Kishore Papineni, Salim Roukos, Todd Ward, and Wei jing Zhu.</strong> 2002.. <em>Bleu: a method for automatic evaluation of machine translation. In ACL.</em></li>
+  <li id="ref-13"><strong>I. Sutskever, O. Vinyals, and Q. V. Le.</strong> 2014.. <em>Sequence to sequence learning with neural networks. In NIPS.</em></li>
+  <li id="ref-14"><strong>Kelvin Xu, Jimmy Ba, Ryan Kiros, Kyunghyun Cho, Aaron C. Courville, Ruslan</strong> Salakhutdinov, Richard S. Zemel, and Yoshua Bengio.. <em>2015. Show, attend and tell: Neural image caption generation with visual attention. In ICML.</em></li>
+  <li id="ref-15"><strong>Wojciech Zaremba, Ilya Sutskever, and Oriol Vinyals.</strong> 2015.. <em>Recurrent neural network regularization. In ICLR. \endthebibliography</em></li>
+</ol>

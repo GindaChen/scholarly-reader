@@ -1,0 +1,34 @@
+title: Revisiting Simple Neural Probabilistic Language Models
+short_title: Revisiting Simple Neural Probabilistic L…
+type: journal-article
+authors:
+  - given: ''
+    family: miyyer\
+date: '2026-03-02'
+url: https://arxiv.org/abs/2104.03474
+pdf: https://arxiv.org/pdf/2104.03474
+arxiv_id: '2104.03474'
+archive: arxiv
+archive_url: https://arxiv.org/abs/2104.03474
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  Recent progress in language modeling has been driven not only by advances in neural architectures,
+  but also through hardware and optimization improvements. In this paper, we revisit the neural
+  probabilistic language model (NPLM) of~\citet{Bengio2003ANP}, which simply concatenates word
+  embeddings within a fixed window and passes the result through a feed-forward network to predict
+  the next word. When scaled up to modern hardware, this model (despite its many limitations)
+  performs much better than
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 1
+reference_count: 32
+sections: 10
+figures: 8

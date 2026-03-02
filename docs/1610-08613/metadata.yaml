@@ -1,0 +1,36 @@
+title: Can Active Memory Replace Attention?
+short_title: Can Active Memory Replace Attention?
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1610.08613
+pdf: https://arxiv.org/pdf/1610.08613
+arxiv_id: '1610.08613'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1610.08613
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  Several mechanisms to focus attention of a neural network on
+  selected parts of its input or memory have been used successfully
+  in deep learning models in recent years. Attention has improved
+  image classification, image captioning, speech recognition,
+  generative models, and learning algorithmic tasks, but it
+  had probably the largest impact on neural machine translation.
+
+  Recently, similar improvements have been obtained using alternative
+  mechanisms that do not focus on a single part of a memory
+  b
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 2
+reference_count: 27
+sections: 4
+figures: 6

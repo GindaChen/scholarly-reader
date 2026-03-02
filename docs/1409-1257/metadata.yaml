@@ -1,0 +1,35 @@
+title: |-
+  Overcoming the Curse of Sentence Length for Neural Machine
+  Translation using Automatic Segmentation
+short_title: Overcoming the Curse of Sentence Length …
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1409.1257
+pdf: https://arxiv.org/pdf/1409.1257
+arxiv_id: '1409.1257'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1409.1257
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  The authors of \cite{Cho2014a} have shown that the recently introduced
+      neural network translation systems suffer from a significant drop in
+      translation quality when translating long sentences, unlike existing
+      phrase-based translation systems. In this paper, we propose a way to
+      address this issue by automatically segmenting an input sentence into
+      phrases that can be easily translated by the neural network translation
+      model. Once each segment has been independently translat
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 11
+reference_count: 10
+sections: 7
+figures: 2

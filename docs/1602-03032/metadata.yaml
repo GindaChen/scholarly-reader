@@ -1,0 +1,35 @@
+title: Untitled Paper
+short_title: Untitled Paper
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1602.03032
+pdf: https://arxiv.org/pdf/1602.03032
+arxiv_id: '1602.03032'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1602.03032
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  We investigate a new method to augment recurrent neural networks with extra memory without
+  increasing the number of network parameters.
+
+  The system has an associative memory based on complex-valued vectors and is closely related to
+  Holographic Reduced Representations and Long Short-Term Memory networks. Holographic Reduced
+  Representations have limited capacity: as they store more information, each retrieval becomes
+  noisier due to interference. 
+
+  Our system in contrast creates redundant copies of s
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 58
+reference_count: 19
+sections: 9
+figures: 10

@@ -1,0 +1,38 @@
+title: A Divide and Conquer Approach to Natural Language Inferencevia Neural Attention
+short_title: A Divide and Conquer Approach to Natural…
+type: journal-article
+authors:
+  - given: Author 1 \and ... \and Author n % Address line ... Address
+    family: line
+date: '2026-03-02'
+url: https://arxiv.org/abs/1606.01933
+pdf: https://arxiv.org/pdf/1606.01933
+arxiv_id: '1606.01933'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1606.01933
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: >-
+  We propose a simple neural architecture for natural language inference.
+
+  Our approach uses attention to decompose the problem into subproblems that can be solved
+  separately, thus making it trivially parallelizable.
+
+  On the Stanford Natural Language Inference (SNLI) dataset, we obtain state-of-the-art results with
+  almost an order of magnitude fewer parameters than previous work and without relying on any
+  word-order information.
+
+  Adding intra-sentence attention that takes a minimum amount of order in
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 10
+reference_count: 31
+sections: 7
+figures: 1

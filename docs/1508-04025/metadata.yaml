@@ -1,0 +1,34 @@
+title: Effective Approaches to Attention-based Neural Machine Translation
+short_title: Effective Approaches to Attention-based …
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1508.04025
+pdf: https://arxiv.org/pdf/1508.04025
+arxiv_id: '1508.04025'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1508.04025
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  An attentional mechanism has lately been used to improve neural machine translation (NMT)
+  by
+  selectively focusing on parts of the source sentence during translation. However,
+  there has been little work exploring useful architectures for attention-based
+  NMT. This paper examines two simple and effective classes of attentional
+  mechanism: a {\it global} approach which always attends to all source words and
+  a {\it local} one that only looks at a subset of source words at a time. 
+  We demonstrate the e
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 12
+reference_count: 15
+sections: 9
+figures: 7

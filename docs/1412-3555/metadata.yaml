@@ -1,0 +1,33 @@
+title: Empirical Evaluation of  Gated Recurrent Neural Networks  on Sequence Modeling
+short_title: Empirical Evaluation of  Gated Recurrent…
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1412.3555
+pdf: https://arxiv.org/pdf/1412.3555
+arxiv_id: '1412.3555'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1412.3555
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  In this paper we compare different types of recurrent units in recurrent
+  neural networks (RNNs). Especially, we focus on more sophisticated units that
+  implement a gating mechanism, such as a long short-term memory (LSTM) unit
+  and a recently proposed gated recurrent unit (GRU). We evaluate these
+  recurrent units on the tasks of polyphonic music modeling and speech signal
+  modeling. Our experiments revealed that these advanced recurrent units are
+  indeed better than more traditional recurrent units s
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 17
+reference_count: 20
+sections: 7
+figures: 3

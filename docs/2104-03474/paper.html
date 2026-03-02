@@ -1,0 +1,616 @@
+<h1>Revisiting Simple Neural Probabilistic Language Models</h1>
+
+<p class="authors">miyyer\</p>
+
+<h2>Abstract</h2>
+<p>Recent progress in language modeling has been driven not only by advances in neural architectures, but also through hardware and optimization improvements. In this paper, we revisit the neural probabilistic language model (NPLM) of~\citet{Bengio2003ANP}, which simply concatenates word embeddings within a fixed window and passes the result through a feed-forward network to predict the next word. When scaled up to modern hardware, this model (despite its many limitations) performs much better than expected on word-level language model benchmarks. Our analysis reveals that the NPLM achieves lower perplexity than a baseline Transformer with short input contexts but struggles to handle long-term dependencies. Inspired by this result, we modify the Transformer by replacing its first self-attention layer with the NPLM's local concatenation layer, which results in small but consistent perplexity decreases across three word-level language modeling datasets.</p>
+
+<hr>
+
+<h2>1. Introduction</h2>
+
+<p>Over the past decade, state-of-the-art neural architectures for language modeling (LM) have transitioned from simple recurrent neural networks~<sup class="ref-badge" data-ref="20" data-title="\vCernock\`y, and Sanjeev Khudanpur. 2011.">20</sup> to LSTMs~<sup class="ref-badge" data-ref="32" data-title="Recurrent neural network regularization.">32</sup> and finally to Transformers~<sup class="ref-badge" data-ref="28" data-title="Aidan N Gomez, \L ukasz Kaiser, and Illia Polosukhin. 2017.">28</sup>. This progress is not due solely to LM-specific advances, however, as general-purpose upgrades such as residual connections~<sup class="ref-badge" data-ref="9" data-title="Deep residual learning for image recognition.">9</sup> and layer normalization~<sup class="ref-badge" data-ref="1" data-title="Layer normalization." data-arxiv-id="1607.06450">1</sup> have enabled scaling to huge datasets and model sizes~<sup class="ref-badge" data-ref="12" data-title="Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. 2020." data-arxiv-id="2001.08361">12</sup> on powerful GPUs.</p>
+
+<p>In this paper, we revisit the neural probabilistic language model (NPLM) of~<sup class="ref-badge" data-ref="4" data-title="A neural probabilistic language model.">4</sup>, the first (and simplest) neural architecture proposed for language modeling, through the lens of modern architecture design, hardware, and optimization. Given an input sequence of tokens, the NPLM first concatenates the previous <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> token embeddings and then passes the result through a feed-forward network to predict the next token. Due to its small context window and lack of parameter sharing, the NPLM has been rendered obsolete, discarded in favor of LSTMs and Transformers.</p>
+
+<p>To what extent are its limitations mitigated by modern design and optimization choices?
+To answer this question,  we design an upgraded NPLM featuring increased depth and window size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span> that incorporates residual connections, layer normalization, and dropout. We also include global context representations  to the concatenation layer by applying simple aggregation functions to embeddings outside of the local context window. These modifications substantially improve the NPLM: on the \wtthree\ benchmark dataset, the original NPLM of~<sup class="ref-badge" data-ref="4" data-title="A neural probabilistic language model.">4</sup> reaches a validation perplexity of **216**, compared to **31.7** for our implementation, and **25.0** for a Transformer baseline.</p>
+
+<p>Can we improve Transformer language models by hybridizing them with NPLMs? Interestingly, we discover that our NPLM actually *outperforms* the Transformer when given shorter input contexts (Figure~<a href="#fig:short-context-l0-constrain" class="cross-ref">Fig. 2</a>), although it is unable to take full advantage of longer contexts. Inspired by this result, we create two simple variants of the Transformer, one in which the first self-attention layer is replaced with the NPLM's concatenation layer, and the other in which self-attention in the first layer is constrained to a small local window. These adjustments result in small but consistent perplexity decreases compared to a baseline Transformer across three word-level language modeling datasets (the first variant obtains **24.1** validation perplexity on \wtthree). Our qualitative analysis shows that the modified Transformers are better at predicting rare tokens and named entities, especially those that have already appeared in the context.</p>
+
+<hr>
+
+<h2>2. Neural probabilistic language models</h2>
+
+<p>Modern neural language models (NLMs) compute the conditional probability of a token <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>w</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">w_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.5806em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span> given preceding (or *prefix*) tokens <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>w</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub></mrow><annotation encoding="application/x-tex">w_{&lt;t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6079em;vertical-align:-0.1774em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1774em;"><span></span></span></span></span></span></span></span></span></span></span> by first computing a dense vector representation of the prefix and then feeding it into a classifier to predict the next word. More concretely, a composition function <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span></span></span></span></span> is applied to the sequence of token embeddings <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\bvec{x}_{&lt;t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1774em;"><span></span></span></span></span></span></span></span></span></span></span> associated with the prefix, which results in a dense vector <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><mi>z</mi><mo>=</mo><mi>g</mi><mo stretchy="false">(</mo><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\bvec{z} = g(\bvec{x}_{&lt;t})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mopen">(</span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1774em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span>. A softmax classifier then takes <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><mi>z</mi></mrow><annotation encoding="application/x-tex">\bvec{z}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span></span></span></span></span> as input and produces a distribution <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo stretchy="false">(</mo><msub><mi>w</mi><mi>t</mi></msub><mo>∣</mo><msub><mi>w</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P(w_t \mid w_{&lt;t})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2806em;"><span style="top:-2.55em;margin-left:-0.0269em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.1774em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span> over the vocabulary. Transformers~<sup class="ref-badge" data-ref="28" data-title="Aidan N Gomez, \L ukasz Kaiser, and Illia Polosukhin. 2017.">28</sup> are currently the most popular choice for the composition function <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span></span></span></span></span>.</p>
+
+<p>**NPLM definition:.** First introduced by~<sup class="ref-badge" data-ref="4" data-title="A neural probabilistic language model.">4</sup>, the NPLM uses a simple composition function reminiscent of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>n</mi></mrow><annotation encoding="application/x-tex">n</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.4306em;"></span><span class="var" data-var="n" data-desc="Sequence length" style="--var-color: #c678dd"><span class="mord mathnormal">n</span></span></span></span></span></span>-gram language modeling. It concatenates the last <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span></span> prefix embeddings and passes the result through a feed-forward layer:</p>
+
+<div class="math-display"><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><mi>z</mi><mo>=</mo><mi>tanh</mi><mo>⁡</mo><mo stretchy="false">(</mo><mstyle mathcolor="#cc0000"><mtext>\bmat</mtext></mstyle><mi>W</mi><mo stretchy="false">[</mo><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><msub><mi>x</mi><mrow><mi>t</mi><mo>−</mo><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msub><mo separator="true">;</mo><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><msub><mi>x</mi><mrow><mi>t</mi><mo>−</mo><mi>k</mi></mrow></msub><mo>…</mo><mtext> </mtext><mo separator="true">;</mo><mstyle mathcolor="#cc0000"><mtext>\bvec</mtext></mstyle><msub><mi>x</mi><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">]</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\bvec{z} = \tanh(\bmat{W}[\bvec{x}_{t-k-1}; \bvec{x}_{t-k} \dots ; \bvec{x}_{t-1}])
+    </annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">tanh</span><span class="mopen">(</span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bmat</span></span><span class="mord"><span class="var" data-var="W" data-desc="Weight matrix" style="--var-color: #a5d6ff"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span><span class="mopen">[</span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord text" style="color:#cc0000;"><span class="mord" style="color:#cc0000;">\bvec</span></span><span class="mord"><span class="mord"><span class="var" data-var="x" data-desc="Input tensor" style="--var-color: #98c379"><span class="mord mathnormal">x</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2083em;"><span></span></span></span></span></span></span><span class="mclose">])</span></span></span></span></span></div>
+
+<p>The NPLM has many intuitive limitations: (1) it ignores the global context provided by prefix tokens further than <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span></span> tokens away; (2) it uses a different set of parameters for each position in the prefix window; and (3) it has a relatively small number of parameters, which limits its expressivity.</p>
+
+### A modern update to the NPLM
+To what extent are these limitations mitigated after scaling up the NPLM using modern advances in neural network training? Here, we investigate the impact of a number of modifications to the NPLM on 
+\wtthree\ validation perplexity (all results in Table~<a href="#tab:ablation" class="cross-ref">Table 1</a>).
+
+<table class="article-table">
+  <caption>NPLM model ablation on \wtthree.</caption>
+  <thead><tr>
+    <th>**Model**</th>
+    <th>**\# Params**</th>
+    <th>**Val. perplexity**</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>Transformer</td>
+    <td>148M</td>
+    <td>25.0</td>
+  </tr>
+  <tr>
+    <td>NPLM-old</td>
+    <td>32M\tablefootnote{Similar to <sup class="ref-badge" data-ref="4" data-title="A neural probabilistic language model.">4</sup> we set embedding dimension to 60 and hidden dimension to 100.}</td>
+    <td>216.0</td>
+  </tr>
+  <tr>
+    <td>NPLM-old (large)</td>
+    <td>221M\tablefootnote{We use the same embedding dimension and hidden dimension of our modern NPLM model. Weights are not tied.}</td>
+    <td>128.2</td>
+  </tr>
+  <tr>
+    <td>NPLM 1L</td>
+    <td>123M</td>
+    <td>52.8</td>
+  </tr>
+  <tr>
+    <td>NPLM 4L</td>
+    <td>128M</td>
+    <td>38.3</td>
+  </tr>
+  <tr>
+    <td>NPLM 16L</td>
+    <td>148M</td>
+    <td>**31.7**</td>
+  </tr>
+  <tr>
+    <td>\hspace{0.3cm} - Residual connections</td>
+    <td>148M</td>
+    <td>660.0</td>
+  </tr>
+  <tr>
+    <td>\hspace{0.3cm} - Adam, + SGD</td>
+    <td>148M</td>
+    <td>418.5</td>
+  </tr>
+  <tr>
+    <td>\hspace{0.3cm} - Global embedding</td>
+    <td>146M</td>
+    <td>41.9</td>
+  </tr>
+  <tr>
+    <td>\hspace{0.3cm} - Global kernel, + average</td>
+    <td>148M</td>
+    <td>37.7</td>
+  </tr>
+  <tr>
+    <td>\hspace{0.3cm} - Layer normalization</td>
+    <td>148M</td>
+    <td>33.0</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>**Increased depth and dimensionality:.** We pass the concatenated representation into a multi-layer network instead of a single layer, and we also substantially increase the embedding and hidden layer dimensionality to 410 and 2100 respectively. \wtthree\ validation perplexity drops from **216** for the original one-layer NPLM (32M parameters) to **41.9** for a 16-layer NPLM with 148M parameters (no global prefix embeddings).</p>
+
+<p>**Better optimization for deep networks:.** To improve gradient flow across the multi-layer network, we apply residual connections~<sup class="ref-badge" data-ref="9" data-title="Deep residual learning for image recognition.">9</sup> and layer normalization~<sup class="ref-badge" data-ref="1" data-title="Layer normalization." data-arxiv-id="1607.06450">1</sup> at each layer. We additionally apply dropout~<sup class="ref-badge" data-ref="26" data-title="Salakhutdinov. 2014.">26</sup>, use rectified linear units (ReLU) instead of the <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>tanh</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\tanh</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mop">tanh</span></span></span></span></span> non-linearity, and train our NPLM with the Adam optimizer~<sup class="ref-badge" data-ref="15" data-title="\href http://arxiv.org/abs/1412.6980 Adam: A method for">15</sup>., we first linearly warm up learning rate for 4K steps and then anneal with one cycle cosine learning rate scheduler. We did not observe improvements annealing with cyclical scheduler.} These modifications are *crucial* for training our 16-layer NPLM: without residual connections, we reach a perplexity of **660**, while using standard SGD instead of Adam yields a perplexity of **418.5**.</p>
+
+<p>**Increased window size:.** While hardware considerations limited the window size <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span></span> of the original NPLM to just five tokens, modern GPUs allow us to quickly train models with much larger memory footprints. We train models up to <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>50</mn></mrow><annotation encoding="application/x-tex">k=50</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">50</span></span></span></span></span> (Figure~<a href="#fig:short-context-l0-constrain" class="cross-ref">Fig. 2</a>) and observe perplexity drop from **87** with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">k=3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">3</span></span></span></span></span> to eventually plateau around **40** with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>50</mn></mrow><annotation encoding="application/x-tex">k=50</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">50</span></span></span></span></span>. The plot also shows that Transformers take far better advantage of longer inputs.</p>
+
+<table class="article-table">
+  <caption>Our Transformer variants improve on the baseline Transformer across three word-level LM datasets. The \# of model parameters is shown in brackets (same for all models). For model details, see Appendix ?}</th>
+    <th>\multicolumn{2}{c}{\wttwo\ (13M)}</th>
+    <th>\multicolumn{2}{c}{\wtthree\ (148M)}</th>
+    <th>\multicolumn{2}{c}{\lambada\ (115M)}</th>
+    <th>\multicolumn{2}{c}{\enwik\ (38M)}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\cmidrule{2-3} \cmidrule{4-5} \cmidrule{6-7} \cmidrule{8-9}</td>
+    <td>\multicolumn{1}{l}{Valid ppl.}</td>
+    <td>\multicolumn{1}{l}{Test ppl.}</td>
+    <td>\multicolumn{1}{l}{Valid ppl.}</td>
+    <td>\multicolumn{1}{l}{Test ppl.}</td>
+    <td>Valid ppl.</td>
+    <td>Test ppl.</td>
+    <td>Valid bpc.</td>
+    <td>Test bpc.</td>
+  </tr>
+  <tr>
+    <td>NPLM</td>
+    <td>120.5</td>
+    <td>114.3</td>
+    <td>31.7</td>
+    <td>32.9</td>
+    <td>44.8</td>
+    <td>44.5</td>
+    <td>1.63</td>
+    <td>1.63</td>
+  </tr>
+  <tr>
+    <td>Transformer</td>
+    <td>117.6</td>
+    <td>111.1</td>
+    <td>25.0</td>
+    <td>26.1</td>
+    <td>42.1</td>
+    <td>41.8</td>
+    <td>**1.14**</td>
+    <td>**1.12**</td>
+  </tr>
+  <tr>
+    <td>Transformer-C</td>
+    <td>113.1</td>
+    <td>107.5</td>
+    <td>24.1</td>
+    <td>**25.1**</td>
+    <td>42.0</td>
+    <td>41.7</td>
+    <td>1.14</td>
+    <td>1.12</td>
+  </tr>
+  <tr>
+    <td>Transformer-N</td>
+    <td>**110.8**</td>
+    <td>**105.6**</td>
+    <td>**24.1**</td>
+    <td>25.2</td>
+    <td>**41.8**</td>
+    <td>**41.5**</td>
+    <td>1.14</td>
+    <td>1.12</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>**Tied weights and adaptive softmax:.** The original NPLM computes probabilities of *all* words in the vocabulary. For datasets with a large vocabulary, we use adaptive softmax~<sup class="ref-badge" data-ref="8" data-title="Herv\'e J\'egou. 2017.">8</sup> to speed up training and decrease the memory footprint. We also tie token embeddings with weights in the softmax layer~<sup class="ref-badge" data-ref="24" data-title="\href https://www.aclweb.org/anthology/E17-2025 Using the output">24</sup> to further reduce  model size. Without these modifications, our 16-layer NPLM does not fit in GPU memory, precluding training.</p>
+
+<p>**Global context representation:.** Prior research demonstrates the effectiveness of representing large chunks of text using *averaged* token embeddings~<sup class="ref-badge" data-ref="11" data-title="\href https://doi.org/10.3115/v1/P15-1162 Deep unordered">11</sup><sup class="ref-badge" data-ref="30" data-title="\href http://arxiv.org/abs/1511.08198 Towards universal">30</sup>. We leverage this work by applying a simple learned kernel (i.e., a 1-D convolution) to the prefix embeddings (beyond just the previous <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6944em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span></span>) and including the resulting vector as an extra embedding</p>
+
+<p>to the concatenation layer. We also experiment with replacing the learned kernel with a uniform average. Adding these simple global embeddings improves the NPLM considerably: our 16-layer model's perplexity drops from **41.9** to **31.7** with the kernel-derived embedding, while the uniform average achieves a perplexity of **37.7**.</p>
+
+<hr>
+
+<h2>3. Using NPLMs to improve Transformers</h2>
+
+<p>While our upgraded NPLM achieves a massive perplexity reduction compared to the original implementation, it is still <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo><mn>6</mn></mrow><annotation encoding="application/x-tex">\sim 6</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">6</span></span></span></span></span> perplexity points short of the baseline Transformer LM. Are there any takeaways from our results that can be used to *improve* Transformer LMs? In this section, we begin with an analysis experiment on \wtthree\ that shows NPLMs outperform Transformers when given shorter prefixes. Inspired by this result, we propose two variants of a Transformer LM that integrate elements of the NPLM, and discover that both of them decrease perplexity across three word-level language modeling datasets (Table <a href="#tab:main-res" class="cross-ref">Table 2</a>).</p>
+
+### NPLMs are better with short contexts <span id="sec:short-context" class="label-anchor"></span>
+Since NPLMs only concatenate a small, fixed number of prefix tokens together, they are obviously unsuited to handle global context. While our upgraded variant addresses this issue to some extent by including aggregated global prefix embeddings into the concatenation layer, the perplexity gap between NPLMs and Transformer LMs remains large. Here, we attempt to understand how much of this difference can be attributed to the Transformer's ability to better model global context. In particular, we train different NPLM and Transformer LMs by truncating the input prefix length to between 3 and 50 tokens. Our NPLM models do not have any global context embeddings in these experiments, and both the NPLM and Transformer models are 16 layers with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span>148M parameters each.
+
+<p>Figure~<a href="#fig:short-context-l0-constrain" class="cross-ref">Fig. 2</a> shows that NPLMs are actually *better* than Transformers when the input sequences are short (i.e., fewer than twenty prefix tokens), but as the prefixes get longer, NPLM perplexity plateaus, while the Transformer perplexity continually decreases. The plot shows that while multi-headed self-attention is effective for longer sequences, it may not be best for modeling shorter contexts.</p>
+
+### Transformer variants
+
+<p>Inspired by these results, we investigate hybrid NPLM and Transformer models to better model both short and long-range contexts. In particular, we create two variants of the Transformer by modifying only its *first* layer (L0), while keeping every other layer the same. In the first modification, **Transformer-N**, we simply replace the first self-attention block in L0 with the NPLM's local concatenation layer (Equation~<a href="#eq:concat" class="cross-ref">Eq. 1</a>), without including any global embeddings. Wondering if the behavior of the concatenation layer can be replicated by self-attention, we also design **Transformer-C**, in which the self-attention window in L0 is constrained to the previous 5 tokens. 
+This constraint is similar to the windowed attention approaches previously applied at all layers in prior Transformer variants~<sup class="ref-badge" data-ref="3" data-title="Longformer: The long-document transformer." data-arxiv-id="2004.05150">3</sup><sup class="ref-badge" data-ref="25" data-title="Efficient content-based sparse attention with routing transformers.">25</sup>.</p>
+
+### Experimental details
+
+<p>**Datasets.** We evaluate our models on four language modeling datasets: \wttwo\ and \wtthree~<sup class="ref-badge" data-ref="19" data-title="\href http://arxiv.org/abs/1609.07843 Pointer sentinel mixture">19</sup>, \lambada~<sup class="ref-badge" data-ref="21" data-title="Raffaella Bernardi, Sandro Pezzelle, Marco Baroni, Gemma Boleda, and Raquel">21</sup>, and the character-level  \enwik\ benchmark~<sup class="ref-badge" data-ref="17" data-title="\href http://arxiv.org/abs/1708.02182 Regularizing and optimizing">17</sup>. 
+For \wttwo\ and \wtthree\ ~<sup class="ref-badge" data-ref="19" data-title="\href http://arxiv.org/abs/1609.07843 Pointer sentinel mixture">19</sup>, we insert an \texttt{<eos>} token after each line, following~<sup class="ref-badge" data-ref="18" data-title="\href http://arxiv.org/abs/1803.08240 An analysis of neural">18</sup>. We use adaptive softmax~<sup class="ref-badge" data-ref="8" data-title="Herv\'e J\'egou. 2017.">8</sup> on \wtthree\ with cutoffs <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>2</mn><mi>e</mi><mn>4</mn><mo separator="true">,</mo><mn>4</mn><mi>e</mi><mn>4</mn><mo separator="true">,</mo><mn>2</mn><mi>e</mi><mn>5</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(2e4, 4e4, 2e5)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">2</span><span class="mord mathnormal">e</span><span class="mord">4</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">4</span><span class="mord mathnormal">e</span><span class="mord">4</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.1667em;"></span><span class="mord">2</span><span class="mord mathnormal">e</span><span class="mord">5</span><span class="mclose">)</span></span></span></span></span>. On \lambada, we follow~<sup class="ref-badge" data-ref="21" data-title="Raffaella Bernardi, Sandro Pezzelle, Marco Baroni, Gemma Boleda, and Raquel">21</sup> by considering only the most frequent 60K words and replacing the rest with \texttt{<unk>} tokens. We use the preprocessing script released by <sup class="ref-badge" data-ref="17" data-title="\href http://arxiv.org/abs/1708.02182 Regularizing and optimizing">17</sup> to process \enwik.</p>
+
+<p>**Models.** We train 16-layer (16L) models on the larger \wtthree\ and \lambada\ datasets, 12L models for \enwik, and 6L for the small \wttwo\ dataset. show is useful for such a small dataset.} For each dataset, we scale embedding and hidden dimensionality to ensure that all models have roughly the same number of parameters. After tuning hyperparameters on the validation data, we set the number of local concatenated tokens to 15 and the number of 1-D convolution kernels to 5.</p>
+
+<p>**Training details.** Our NPLM is trained with dropout probability <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.2</mn></mrow><annotation encoding="application/x-tex">p=0.2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.2</span></span></span></span></span>, while the other models use <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.1</mn></mrow><annotation encoding="application/x-tex">p=0.1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.1</span></span></span></span></span> on all datasets except for \wttwo, for which they use <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.3</mn></mrow><annotation encoding="application/x-tex">p=0.3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.1944em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.3</span></span></span></span></span>. For all models, we use the Adam optimizer with <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>β</mi><mn>1</mn></msub><mo>=</mo><mn>0.9</mn></mrow><annotation encoding="application/x-tex">\beta_1 = 0.9</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0528em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.9</span></span></span></span></span> and <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>β</mi><mn>2</mn></msub><mo>=</mo><mn>0.999</mn></mrow><annotation encoding="application/x-tex">\beta_2 = 0.999</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8889em;vertical-align:-0.1944em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3011em;"><span style="top:-2.55em;margin-left:-0.0528em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2778em;"></span></span><span class="base"><span class="strut" style="height:0.6444em;"></span><span class="mord">0.999</span></span></span></span></span>, and training is conducted on 1080Ti GPUs. During evaluation, we follow the methodology of~<sup class="ref-badge" data-ref="14" data-title="2020.">14</sup> by providing extra prior context for the scored tokens, 
+for instance, in a block of 512 tokens, only the last 128 tokens are scored with the first 384 tokens as context. Detailed architecture, training, and evaluation configurations are included in Appendix~<a href="#appendix:config" class="cross-ref">Section 3</a>.</p>
+
+### Results and analysis
+
+<p>Table~<a href="#tab:main-res" class="cross-ref">Table 2</a> shows that **Transformer-N** improves over the baseline Transformer across all three word-level language modeling benchmarks, with the biggest perplexity drop coming on the small \wttwo\ dataset, although character-level perplexity on \enwik\ is unchanged.  **Transformer-C** also outperforms the baseline Transformer but by smaller margins than **Transformer-N**.</p>
+
+<p>**Narrower window size in L0 is better:.**
+We examine \wtthree\ val. perplexity as a function of Transformer-C window size. 
+Figure <a href="#fig:short-context-l0-constrain-1" class="cross-ref">Fig. 3</a> shows drops of <span class="math-inline"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∼</mo></mrow><annotation encoding="application/x-tex">\sim</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.3669em;"></span><span class="mrel">∼</span></span></span></span></span> 1 perplexity point with window sizes of 2-4, which disappear as window size is increased. This experiment supports the importance of focusing on local context at lower layers.</p>
+
+<p>**Hybrid models improve at predicting entities and rare words:.**
+To obtain a more fine-grained understanding of our models, we turn to the long-distance dependency prediction task in \lambada ~<sup class="ref-badge" data-ref="21" data-title="Raffaella Bernardi, Sandro Pezzelle, Marco Baroni, Gemma Boleda, and Raquel">21</sup>, a manually-annotated subset of the full dataset in which correctly predicting a token is possible only when longer contexts are provided.</p>
+
+<p>Table <a href="#tab:lambada-acc" class="cross-ref">Table 3</a> shows that our upgraded NPLM achieves less than 1\% accuracy (argmax prediction) on the test set but 30\% on a control set that does not test long-term dependencies. As the baseline Transformer reaches over 30\% accuracy on the test set, this result shows that the convolutional kernels in our modernized NPLM are incompetent at modeling long-range context.</p>
+
+<p>On the other hand, both **Transformer-N** and **Transformer-C** outperform the baseline Transformer (Table <a href="#tab:lambada-acc" class="cross-ref">Table 3</a>) by over 1.5\% on the test set. To better understand these improvements, we perform a fine-grained analysis of the tokens for which these models improve over the Transformer. This analysis reveals that the gains stem mainly from three types of target tokens: (1) context-freqeunt (CF) tokens that appear more than twice in the prefix; (2) low frequency tokens (LF) with frequency below 1500; and (3) named entity tokens (Ent) detected by the spaCy~<sup class="ref-badge" data-ref="10" data-title="\href https://doi.org/10.5281/zenodo.1212303 spaCy:">10</sup> NER tagger. The three right-most columns of Table~<a href="#tab:lambada-acc" class="cross-ref">Table 3</a> shows that both Transformer variants are more accurate at predicting these tokens, which demonstrates the benefits of enforcing local focus at the first layer.</p>
+
+<table class="article-table">
+  <caption>NPLM and Transformer variants on LAMBADA target word accuracy (\%). 
+    Variants perform better on context-frequent (CF) tokens that appear at least twice in previous context, low frequency (LF) tokens with frequency < 1500, and named entities (Ent).</caption>
+  <thead><tr>
+    <th>Model</th>
+    <th>Test</th>
+    <th>Control</th>
+    <th>CF</th>
+    <th>LF</th>
+    <th>Ent.</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\cmidrule(lr){1-3} \cmidrule(lr){4-6}
+        NPLM</td>
+    <td>0.40</td>
+    <td>30.46</td>
+    <td>-</td>
+    <td>-</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>Transformer</td>
+    <td>30.60</td>
+    <td>35.84</td>
+    <td>38.94</td>
+    <td>29.47</td>
+    <td>32.26</td>
+  </tr>
+  <tr>
+    <td>Transformer-N</td>
+    <td>**32.51**</td>
+    <td>37.06</td>
+    <td>42.33</td>
+    <td>30.14</td>
+    <td>33.95</td>
+  </tr>
+  <tr>
+    <td>Transformer-C</td>
+    <td>32.23</td>
+    <td>**37.34**</td>
+    <td>**42.65**</td>
+    <td>**31.58**</td>
+    <td>**35.03**</td>
+  </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<h2>4. Related work</h2>
+
+<p>The NPLM model in this paper based entirely on the original formulation from~<sup class="ref-badge" data-ref="4" data-title="A neural probabilistic language model.">4</sup>.
+The variants in our analysis are based on the Transformer model~<sup class="ref-badge" data-ref="28" data-title="Aidan N Gomez, \L ukasz Kaiser, and Illia Polosukhin. 2017.">28</sup> and Transformer LMs~<sup class="ref-badge" data-ref="2" data-title="\href https://openreview.net/forum?id=ByxZX20qFQ Adaptive input">2</sup><sup class="ref-badge" data-ref="7" data-title="Kaiser. 2019.">7</sup><sup class="ref-badge" data-ref="6" data-title="Salakhutdinov. 2019.">6</sup><sup class="ref-badge" data-ref="27" data-title="\href https://doi.org/10.18653/v1/P19-1032 Adaptive attention span">27</sup><sup class="ref-badge" data-ref="14" data-title="2020.">14</sup><sup class="ref-badge" data-ref="29" data-title="\href http://arxiv.org/abs/1904.09408 Language models with">29</sup><sup class="ref-badge" data-ref="22" data-title="\href https://doi.org/10.18653/v1/2020.acl-main.270 Improving">22</sup><sup class="ref-badge" data-ref="16" data-title="Pay attention when required." data-arxiv-id="2009.04534">16</sup><sup class="ref-badge" data-ref="23" data-title="\href http://arxiv.org/abs/2012.15832 Shortformer: Better language">23</sup>. 
+The constrained local attention in Transformer-C is adopted at all layers of models such as Longformer ~<sup class="ref-badge" data-ref="3" data-title="Longformer: The long-document transformer." data-arxiv-id="2004.05150">3</sup> and Big Bird~<sup class="ref-badge" data-ref="31" data-title="Alberti, Santiago Ontanon, Philip Pham, Anirudh Ravula, Qifan Wang, Li Yang,">31</sup> due to its sparsity. Our work conceptually resembles that of~<sup class="ref-badge" data-ref="5" data-title="\href https://www.aclweb.org/anthology/2020.emnlp-main.103 Scaling">5</sup>, who modernize HMM language models, as well as simple RNN-based language models~<sup class="ref-badge" data-ref="18" data-title="\href http://arxiv.org/abs/1803.08240 An analysis of neural">18</sup>. Our linguistic analysis is inspired by experiments from~<sup class="ref-badge" data-ref="13" data-title="\href https://doi.org/10.18653/v1/P18-1027 Sharp nearby, fuzzy far">13</sup>.</p>
+
+<hr>
+
+<h2>5. Conclusion</h2>
+
+<p>We discover that general-purpose advances in neural architecture design, hardware, and optimization significantly improve the NPLM, a classic language model. An analysis of our upgraded NPLM inspires us to hybridize it with a modern Transformer LM and obtain perplexity decreases across three word-level LM datasets.</p>
+
+<hr>
+
+<h2>6. Ethics statement</h2>
+
+<p>**Misuse of language models.**
+Our research involves training large language models on publicly available benchmark datasets. They share the same issues faced by many pretrained language models, such as being used maliciously to generate unfaithful, biased or offensive output.</p>
+
+<p>**Energy costs.**
+We train our models and variants on 4 GeForce GTX 1080 Ti GPUs for all datasets except \wttwo.  We use only one GPU for experiments on \wttwo. The Transformer and its variants take longer to train (40h, 102h, and 108h on \wtthree, \lambada, and \enwik\ respectively). Our modernized NPLM does not have attention module, and therefore trains relatively faster (32h, 45h, and 88h for the above datasets). The energy costs of training and tuning these models, as well as doing exploratory experiments in the initial stages of the project, cannot be ignored. That said, compared to Transformer models, the modernized NPLM has significantly reduced training time, and hence carbon costs. We hope our work contains useful insights for future research that aims to develop simpler and more efficient language models.</p>
+
+<hr>
+
+<h2>7. Acknowledgements</h2>
+
+<p>We thank Nader Akoury, Andrew Drozdov, Shufan Wang, and the rest of UMass NLP group for their constructive suggestions on the draft of this paper. We also thank the anonymous reviewers for their helpful comments. This work was supported by award IIS-1955567 from the National Science Foundation (NSF).</p>
+
+<p>\bibliography{anthology,custom}
+\bibliographystyle{acl_natbib}</p>
+
+<p>\newpage
+\appendix</p>
+
+<hr>
+
+<h2>8. Experiment details</h2>
+
+<span id="sec:appendix-exp" class="label-anchor"></span>
+
+<table class="article-table">
+  <caption>Dataset statistics</caption>
+  <thead><tr>
+    <th>Dataset</th>
+    <th>Train \#Tokens</th>
+    <th>Vocab. size</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\wttwo</td>
+    <td>2M</td>
+    <td>33K</td>
+  </tr>
+  <tr>
+    <td>\wtthree</td>
+    <td>103M</td>
+    <td>267K</td>
+  </tr>
+  <tr>
+    <td>\lambada</td>
+    <td>203M</td>
+    <td>60K</td>
+  </tr>
+  <tr>
+    <td>\enwik</td>
+    <td>100M</td>
+    <td>205</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>Dataset statistics are shown in Table <a href="#tab:datasets" class="cross-ref">Table 5</a>.</p>
+
+<table class="article-table">
+  <caption>Training sequence length as well as scored target length and total test sequence length during evaluation we used on each dataset.</caption>
+  <thead><tr>
+    <th>Dataset</th>
+    <th>Train len</th>
+    <th>Test len</th>
+    <th>Tgt. len</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\wttwo</td>
+    <td>512</td>
+    <td>512</td>
+    <td>128</td>
+  </tr>
+  <tr>
+    <td>\wtthree</td>
+    <td>512</td>
+    <td>512</td>
+    <td>128</td>
+  </tr>
+  <tr>
+    <td>\lambada</td>
+    <td>512</td>
+    <td>512</td>
+    <td>128</td>
+  </tr>
+  <tr>
+    <td>\enwik</td>
+    <td>1024</td>
+    <td>1024</td>
+    <td>512</td>
+  </tr>
+  </tbody>
+</table>
+
+<table class="article-table">
+  <caption>Model configuration on \wttwo\ , \wtthree\ , \enwik\ , \lambada\ .</caption>
+  <thead><tr>
+    <th>lcccccccc@{}}
+
+<p>\multicolumn{1}{l}{}</th>
+    <th>\multicolumn{2}{c}{\wttwo}</th>
+    <th>\multicolumn{2}{c}{\wtthree}</th>
+    <th>\multicolumn{2}{c}{\enwik}</th>
+    <th>\multicolumn{2}{c}{\lambada}</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\cmidrule{2-3} \cmidrule{4-5} \cmidrule{6-7} \cmidrule{8-9}</td>
+    <td>NPLM</td>
+    <td>Transformer</td>
+    <td>NPLM</td>
+    <td>Transformer</td>
+    <td>NPLM</td>
+    <td>Transformer</td>
+    <td>NPLM</td>
+    <td>Transformer</td>
+  </tr>
+  <tr>
+    <td>\# Layers</td>
+    <td>6</td>
+    <td>6</td>
+    <td>16</td>
+    <td>16</td>
+    <td>12</td>
+    <td>12</td>
+    <td>16</td>
+    <td>16</td>
+  </tr>
+  <tr>
+    <td>Emb. dimension</td>
+    <td>256</td>
+    <td>256</td>
+    <td>410</td>
+    <td>410</td>
+    <td>512</td>
+    <td>512</td>
+    <td>512</td>
+    <td>512</td>
+  </tr>
+  <tr>
+    <td>Hidden dimension</td>
+    <td>1024</td>
+    <td>1024</td>
+    <td>2100</td>
+    <td>2100</td>
+    <td>2048</td>
+    <td>2048</td>
+    <td>4096</td>
+    <td>4096</td>
+  </tr>
+  <tr>
+    <td>Concat hidden dimension</td>
+    <td>400</td>
+    <td>-</td>
+    <td>2000</td>
+    <td>-</td>
+    <td>1400</td>
+    <td>-</td>
+    <td>2000</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>\# Attention heads</td>
+    <td>-</td>
+    <td>4</td>
+    <td>-</td>
+    <td>10</td>
+    <td>-</td>
+    <td>8</td>
+    <td>-</td>
+    <td>16</td>
+  </tr>
+  <tr>
+    <td>Adaptive softmax</td>
+    <td>no</td>
+    <td>no</td>
+    <td>yes</td>
+    <td>yes</td>
+    <td>no</td>
+    <td>no</td>
+    <td>no</td>
+    <td>no</td>
+  </tr>
+  <tr>
+    <td>\# Concat tokens</td>
+    <td>15</td>
+    <td>-</td>
+    <td>15</td>
+    <td>-</td>
+    <td>15</td>
+    <td>-</td>
+    <td>15</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>\# Kernel global</td>
+    <td>5</td>
+    <td>-</td>
+    <td>5</td>
+    <td>-</td>
+    <td>5</td>
+    <td>-</td>
+    <td>5</td>
+    <td>-</td>
+  </tr>
+  <tr>
+    <td>Dropout</td>
+    <td>0.3</td>
+    <td>0.3</td>
+    <td>0.2</td>
+    <td>0.1</td>
+    <td>0.2</td>
+    <td>0.1</td>
+    <td>0.2</td>
+    <td>0.1</td>
+  </tr>
+  <tr>
+    <td>\#Param</td>
+    <td>13M</td>
+    <td>13M</td>
+    <td>149M</td>
+    <td>148M</td>
+    <td>38M</td>
+    <td>38M</td>
+    <td>115M</td>
+    <td>115M</td>
+  </tr>
+  </tbody>
+</table></p>
+
+<table class="article-table">
+  <caption>Details of training on the four datasets. Models are trained on single 1080Ti GPU for \wttwo, and on four 1080Ti GPUs for the rest datasets. When a configuration is different for Transformer and NPLM, it's shown in the order Transformer/NPLM.</caption>
+  <thead><tr>
+    <th></th>
+    <th>Warmup steps</th>
+    <th>Learning rate</th>
+    <th>Max steps</th>
+    <th>Batch size</th>
+    <th>Training time</th>
+  </tr></thead>
+  <tbody>
+  <tr>
+    <td>\wttwo</td>
+    <td>100</td>
+    <td>5e-4</td>
+    <td>10k</td>
+    <td>5120</td>
+    <td>1.2h/1h</td>
+  </tr>
+  <tr>
+    <td>\wtthree</td>
+    <td>4k</td>
+    <td>2.5e-4/3.5e-4</td>
+    <td>200k</td>
+    <td>10240</td>
+    <td>40h/32h</td>
+  </tr>
+  <tr>
+    <td>\enwik</td>
+    <td>0</td>
+    <td>2.5e-4</td>
+    <td>400k</td>
+    <td>22528</td>
+    <td>102h/45h</td>
+  </tr>
+  <tr>
+    <td>\lambada</td>
+    <td>4k</td>
+    <td>3e-4</td>
+    <td>400k</td>
+    <td>8192</td>
+    <td>108h/88h</td>
+  </tr>
+  </tbody>
+</table>
+
+<p>\noindent **Evaluation** We follow the practice in ~<sup class="ref-badge" data-ref="14" data-title="2020.">14</sup> to provide extra prior context for the scored tokens. We provide the training sequence length, test total sequence length, and test target sequence length in Table <a href="#tab:eval-config" class="cross-ref">Table 6</a>.</p>
+
+<hr>
+
+<h2>9. Model configurations</h2>
+
+<span id="appendix:config" class="label-anchor"></span>
+
+<p>Detailed model configurations are shown in Table <a href="#tab:model-configs" class="cross-ref">Table 7</a>.  Training details are shown in Table <a href="#tab:train-config" class="cross-ref">Table 8</a>.</p>
+
+<hr>
+
+<h2>10. Rank analysis on \wtthree </h2>
+
+<span id="sec:rank-analysis" class="label-anchor"></span>
+
+<hr>
+
+<h2>References</h2>
+<ol class="references">
+  <li id="ref-1"><strong>Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. 2016.</strong> Layer normalization.. <em>arXiv preprint arXiv:1607.06450.</em></li>
+  <li id="ref-2"><strong>Alexei Baevski and Michael Auli. 2019.</strong> \href https://openreview.net/forum?id=ByxZX20qFQ Adaptive input. <em>representations for neural language modeling. In International Conference on Learning Representations.</em></li>
+  <li id="ref-3"><strong>Iz Beltagy, Matthew E. Peters, and Arman Cohan. 2020.</strong> Longformer: The long-document transformer.. <em>arXiv:2004.05150.</em></li>
+  <li id="ref-4"><strong>Yoshua Bengio, R. Ducharme, Pascal Vincent, and Christian Janvin. 2003.</strong> A neural probabilistic language model.. <em>J. Mach. Learn. Res., 3:1137--1155.</em></li>
+  <li id="ref-5"><strong>Justin Chiu and Alexander Rush. 2020.</strong> \href https://www.aclweb.org/anthology/2020.emnlp-main.103 Scaling. <em>hidden Markov language models. In Proceedings of the 2020 Conference on Empirical Methods in Natural Language Processing (EMNLP), pages 1341--1349, Online. Association for Computational Linguistics.</em></li>
+  <li id="ref-6"><strong>Zihang Dai, Zhilin Yang, Yiming Yang, Jaime Carbonell, Quoc Le, and Ruslan</strong> Salakhutdinov. 2019.. <em>\href https://doi.org/10.18653/v1/P19-1285 Transformer-XL: Attentive language models beyond a fixed-length context. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 2978--2988, Florence, Italy. Association for Computational Linguistics.</em></li>
+  <li id="ref-7"><strong>Mostafa Dehghani, Stephan Gouws, Oriol Vinyals, Jakob Uszkoreit, and Lukasz</strong> Kaiser. 2019.. <em>\href https://openreview.net/forum?id=HyzdRiR9Y7 Universal transformers. In International Conference on Learning Representations.</em></li>
+  <li id="ref-8"><strong>\'Edouard Grave, Armand Joulin, Moustapha Ciss\'e, David Grangier, and</strong> Herv\'e J\'egou. 2017.. <em>\href http://proceedings.mlr.press/v70/grave17a.html Efficient softmax approximation for GPUs. volume 70 of Proceedings of Machine Learning Research, pages 1302--1310, International Convention Centre, Sydney, Australia. PMLR.</em></li>
+  <li id="ref-9"><strong>Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. 2016.</strong> Deep residual learning for image recognition.. <em>In Proceedings of the IEEE conference on computer vision and pattern recognition, pages 770--778.</em></li>
+  <li id="ref-10"><strong>Matthew Honnibal, Ines Montani, Sofie Van Landeghem, and Adriane Boyd. 2020.</strong> \href https://doi.org/10.5281/zenodo.1212303 spaCy:. <em>Industrial-strength Natural Language Processing in Python.</em></li>
+  <li id="ref-11"><strong>Mohit Iyyer, Varun Manjunatha, Jordan Boyd-Graber, and Hal Daum\'e III. 2015.</strong> \href https://doi.org/10.3115/v1/P15-1162 Deep unordered. <em>composition rivals syntactic methods for text classification. In Proceedings of the 53rd Annual Meeting of the Association for Computational Linguistics and the 7th International Joint Conference on Natural Language Processing (Volume 1: Long Papers), pages 1681--1691, Beijing, China. Association for Computational Linguistics.</em></li>
+  <li id="ref-12"><strong>Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B Brown, Benjamin Chess, Rewon</strong> Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. 2020.. <em>Scaling laws for neural language models. arXiv preprint arXiv:2001.08361.</em></li>
+  <li id="ref-13"><strong>Urvashi Khandelwal, He He, Peng Qi, and Dan Jurafsky. 2018.</strong> \href https://doi.org/10.18653/v1/P18-1027 Sharp nearby, fuzzy far. <em>away: How neural language models use context. In Proceedings of the 56th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 284--294, Melbourne, Australia. Association for Computational Linguistics.</em></li>
+  <li id="ref-14"><strong>Urvashi Khandelwal, Omer Levy, Dan Jurafsky, Luke Zettlemoyer, and Mike Lewis.</strong> 2020.. <em>\href https://openreview.net/forum?id=HklBjCEKvH Generalization through memorization: Nearest neighbor language models. In International Conference on Learning Representations.</em></li>
+  <li id="ref-15"><strong>Diederik P. Kingma and Jimmy Ba. 2015.</strong> \href http://arxiv.org/abs/1412.6980 Adam: A method for. <em>stochastic optimization. In 3rd International Conference on Learning Representations, ICLR 2015, San Diego, CA, USA, May 7-9, 2015, Conference Track Proceedings.</em></li>
+  <li id="ref-16"><strong>Swetha Mandava, Szymon Migacz, and Alex Fit Florea. 2020.</strong> Pay attention when required.. <em>arXiv preprint arXiv:2009.04534.</em></li>
+  <li id="ref-17"><strong>Stephen Merity, Nitish Shirish Keskar, and Richard Socher. 2017.</strong> \href http://arxiv.org/abs/1708.02182 Regularizing and optimizing. <em>LSTM language models. CoRR, abs/1708.02182.</em></li>
+  <li id="ref-18"><strong>Stephen Merity, Nitish Shirish Keskar, and Richard Socher. 2018.</strong> \href http://arxiv.org/abs/1803.08240 An analysis of neural. <em>language modeling at multiple scales. CoRR, abs/1803.08240.</em></li>
+  <li id="ref-19"><strong>Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. 2016.</strong> \href http://arxiv.org/abs/1609.07843 Pointer sentinel mixture. <em>models. CoRR, abs/1609.07843.</em></li>
+  <li id="ref-20"><strong>Tom\'a\vs Mikolov, Stefan Kombrink, Luk\'a\vs Burget, Jan</strong> \vCernock\`y, and Sanjeev Khudanpur. 2011.. <em>Extensions of recurrent neural network language model. In 2011 IEEE international conference on acoustics, speech and signal processing (ICASSP), pages 5528--5531. IEEE.</em></li>
+  <li id="ref-21"><strong>Denis Paperno, Germ\'an Kruszewski, Angeliki Lazaridou, Ngoc Quan Pham,</strong> Raffaella Bernardi, Sandro Pezzelle, Marco Baroni, Gemma Boleda, and Raquel. <em>Fern\'andez. 2016. \href https://doi.org/10.18653/v1/P16-1144 The LAMBADA dataset: Word prediction requiring a broad discourse context. In Proceedings of the 54th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 1525--1534, Berlin, Germany. Association for Computational Linguistics.</em></li>
+  <li id="ref-22"><strong>Ofir Press, Noah A. Smith, and Omer Levy. 2020\natexlaba.</strong> \href https://doi.org/10.18653/v1/2020.acl-main.270 Improving. <em>transformer models by reordering their sublayers. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics, pages 2996--3005, Online. Association for Computational Linguistics.</em></li>
+  <li id="ref-23"><strong>Ofir Press, Noah A. Smith, and Mike Lewis. 2020\natexlabb.</strong> \href http://arxiv.org/abs/2012.15832 Shortformer: Better language. <em>modeling using shorter inputs.</em></li>
+  <li id="ref-24"><strong>Ofir Press and Lior Wolf. 2017.</strong> \href https://www.aclweb.org/anthology/E17-2025 Using the output. <em>embedding to improve language models. In Proceedings of the 15th Conference of the European Chapter of the Association for Computational Linguistics: Volume 2, Short Papers, pages 157--163, Valencia, Spain. Association for Computational Linguistics.</em></li>
+  <li id="ref-25"><strong>Aurko Roy, M. Saffar, Ashish Vaswani, and David Grangier. 2020.</strong> Efficient content-based sparse attention with routing transformers.. <em>ArXiv, abs/2003.05997.</em></li>
+  <li id="ref-26"><strong>Nitish Srivastava, Geoffrey Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan</strong> Salakhutdinov. 2014.. <em>\href http://jmlr.org/papers/v15/srivastava14a.html Dropout: A simple way to prevent neural networks from overfitting. Journal of Machine Learning Research, 15(56):1929--1958.</em></li>
+  <li id="ref-27"><strong>Sainbayar Sukhbaatar, Edouard Grave, Piotr Bojanowski, and Armand Joulin. 2019.</strong> \href https://doi.org/10.18653/v1/P19-1032 Adaptive attention span. <em>in transformers. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics, pages 331--335, Florence, Italy. Association for Computational Linguistics.</em></li>
+  <li id="ref-28"><strong>Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones,</strong> Aidan N Gomez, \L ukasz Kaiser, and Illia Polosukhin. 2017.. <em>\href https://proceedings.neurips.cc/paper/2017/file/3f5ee243547dee91fbd053c1c4a845aa-Paper.pdf Attention is all you need. In Advances in Neural Information Processing Systems, volume 30, pages 5998--6008. Curran Associates, Inc.</em></li>
+  <li id="ref-29"><strong>Chenguang Wang, Mu Li, and Alexander J. Smola. 2019.</strong> \href http://arxiv.org/abs/1904.09408 Language models with. <em>transformers. CoRR, abs/1904.09408.</em></li>
+  <li id="ref-30"><strong>John Wieting, Mohit Bansal, Kevin Gimpel, and Karen Livescu. 2016.</strong> \href http://arxiv.org/abs/1511.08198 Towards universal. <em>paraphrastic sentence embeddings. In 4th International Conference on Learning Representations, ICLR 2016, San Juan, Puerto Rico, May 2-4, 2016, Conference Track Proceedings.</em></li>
+  <li id="ref-31"><strong>Manzil Zaheer, Guru Guruganesh, Kumar Avinava Dubey, Joshua Ainslie, Chris</strong> Alberti, Santiago Ontanon, Philip Pham, Anirudh Ravula, Qifan Wang, Li Yang,. <em>et al. 2020. Big bird: Transformers for longer sequences. Advances in Neural Information Processing Systems, 33.</em></li>
+  <li id="ref-32"><strong>Wojciech Zaremba, Ilya Sutskever, and Oriol Vinyals. 2014.</strong> Recurrent neural network regularization.. <em>\endthebibliography</em></li>
+</ol>

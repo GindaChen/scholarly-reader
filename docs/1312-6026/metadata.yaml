@@ -1,0 +1,35 @@
+title: How to Construct Deep Recurrent Neural Networks
+short_title: How to Construct Deep Recurrent Neural N…
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1312.6026
+pdf: https://arxiv.org/pdf/1312.6026
+arxiv_id: '1312.6026'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1312.6026
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  In this paper, we explore different ways to extend a recurrent
+      neural network (RNN) to a \textit{deep} RNN. We start by
+      arguing that the concept of depth in an RNN is not as clear
+      as it is in feedforward neural networks.  By carefully
+      analyzing and understanding the architecture of an RNN,
+      however, we find three points of an RNN which may be made
+      deeper; (1) input-to-hidden function, (2) hidden-to-hidden
+      transition and (3) hidden-to-output function. Based on this
+      
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 10
+reference_count: 48
+sections: 6
+figures: 2

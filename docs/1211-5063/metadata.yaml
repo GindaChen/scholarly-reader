@@ -1,0 +1,36 @@
+title: Untitled Paper
+short_title: Untitled Paper
+type: journal-article
+authors: []
+date: '2026-03-02'
+url: https://arxiv.org/abs/1211.5063
+pdf: https://arxiv.org/pdf/1211.5063
+arxiv_id: '1211.5063'
+archive: arxiv
+archive_url: https://arxiv.org/abs/1211.5063
+source: arxiv-pipeline
+pipeline_version: '2.1'
+tags:
+  - auto-imported
+  - arxiv-pipeline
+abstract: |-
+  There are two widely known issues with properly training Recurrent Neural 
+
+  Networks, the \emph{vanishing} and the \emph{exploding} gradient problems 
+  detailed in \citet{Bengio-trnn94}. In this paper we attempt
+  to improve the understanding of the underlying issues by exploring these 
+  problems
+  from an analytical, a geometric and a dynamical systems perspective. 
+  Our analysis is used to justify a simple yet effective solution. 
+  We propose a gradient norm clipping strategy to deal with
+  exploding gr
+files:
+  - name: paper.html
+    format: html
+    description: Rendered with KaTeX math and extracted figures
+    primary: true
+variable_count: 0
+equation_count: 14
+reference_count: 25
+sections: 7
+figures: 7
