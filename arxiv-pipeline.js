@@ -85,9 +85,23 @@ function resolveInputs(filePath, baseDir) {
     return content;
 }
 
+function extractBracedContent(tex, cmd) {
+    // Find \cmd{ and extract content handling nested braces + optional [...]
+    const re = new RegExp('\\\\' + cmd + '(?:\\[[^\\]]*\\])?\\{');
+    const match = re.exec(tex);
+    if (!match) return null;
+    let depth = 1, i = match.index + match[0].length, result = '';
+    while (i < tex.length && depth > 0) {
+        if (tex[i] === '{') depth++;
+        else if (tex[i] === '}') { depth--; if (depth === 0) break; }
+        result += tex[i++];
+    }
+    return result.replace(/\\\\/, ' ').replace(/\s+/g, ' ').trim() || null;
+}
+
 function extractMetadata(fullTex) {
-    const titleMatch = fullTex.match(/\\title\{([^}]+)\}/);
-    const title = titleMatch ? titleMatch[1].replace(/\\\\/g, '').trim() : 'Untitled Paper';
+    const rawTitle = extractBracedContent(fullTex, 'title');
+    const title = rawTitle ? rawTitle.replace(/\\[a-zA-Z]+/g, '').replace(/[{}]/g, '').trim() : 'Untitled Paper';
 
     const authorMatch = fullTex.match(/\\author\{([\s\S]*?)\}/);
     let authors = [];
@@ -382,7 +396,18 @@ async function importArxiv(arxivId, onProgress) {
     const docMatch = fullTex.match(/\\begin\{document\}([\s\S]*?)\\end\{document\}/);
     const body = docMatch ? docMatch[1] : fullTex;
 
-    const meta = extractMetadata(fullTex);
+    let meta = extractMetadata(fullTex);
+
+    // Fallback: fetch title from arXiv API if extraction yielded nothing
+    if (meta.title === 'Untitled Paper') {
+        try {
+            const xml = await fetch(`https://export.arxiv.org/api/query?id_list=${encodeURIComponent(cleanId)}`).then(r => r.text());
+            const titleMatch = xml.match(/<entry>[\s\S]*?<title>([\s\S]*?)<\/title>/);
+            if (titleMatch) meta.title = titleMatch[1].replace(/\s+/g, ' ').trim();
+        } catch (e) { /* ignore — keep Untitled */ }
+        progress(`Title: ${meta.title}`);
+    }
+
     const sections = extractSections(body);
     const bibMatch = body.match(/\\begin\{thebibliography\}[\s\S]*?\\end\{thebibliography\}/);
     const bibRaw = bibMatch ? bibMatch[0] : '';
