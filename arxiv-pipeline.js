@@ -378,7 +378,7 @@ async function importArxiv(arxivId, onProgress) {
 
     // Detect PDF-only submissions (TeX just embeds a PDF, no real content)
     const isPdfOnly = !fullTex.includes('\\section') && !fullTex.includes('\\begin{abstract}')
-        && fullTex.includes('\\includegraphics') && /\.pdf/.test(fullTex);
+        && (fullTex.includes('\\includepdf') || (fullTex.includes('\\includegraphics') && /\.pdf/.test(fullTex)));
 
     if (isPdfOnly) {
         progress('PDF-only submission detected — fetching metadata from arXiv API…');
